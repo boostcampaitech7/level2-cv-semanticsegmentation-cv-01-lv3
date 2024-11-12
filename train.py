@@ -86,7 +86,7 @@ def main():
     
     # Loss function과 optimizer 설정
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.AdamW(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
+    optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
     
     # 학습 수행
     train(model, train_loader, valid_loader, criterion, optimizer, 
