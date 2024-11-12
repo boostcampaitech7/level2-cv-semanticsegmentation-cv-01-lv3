@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
-from utils.train_utils import train, set_seed
+from utils.trainer import train, set_seed
 
 
 def parse_args():
