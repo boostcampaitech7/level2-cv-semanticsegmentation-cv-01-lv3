@@ -15,6 +15,10 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
     print('Start training..')
     
     best_dice = 0.
+    # 클래스별 다이스 스코어 히스토리 저장을 위한 리스트 추가
+    dice_history = {class_name: [] for class_name in CLASSES}
+    epoch_history = []
+    
     for epoch in range(num_epochs):
         model.train()
         for step, (images, masks) in enumerate(data_loader):
@@ -46,43 +50,51 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
-            dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)  # validation 함수가 class별 dice도 반환하도록 수정
+            dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
             
             if best_dice < dice:
                 print(f"Best performance at epoch: {epoch + 1}, {best_dice:.4f} -> {dice:.4f}")
                 print(f"Save model in {saved_dir}")
                 best_dice = dice
                 model_path = save_model(model, f"{model_name}.pt", saved_dir)
+                # Best 모델 파일 저장
+                wandb.save(model_path)
+            
+            # Wandb에 검증 지표와 모델 파일 기록
+            # 히스토리 업데이트
+            epoch_history.append(epoch)
+            for class_name, class_dice in zip(CLASSES, dices_per_class):
+                    dice_history[class_name].append(class_dice.item())
+            
+            # 기본 메트릭 로깅
+            wandb.log({
+                "valid/mean_dice": dice,
+                "valid/epoch": epoch,
+            })
+            
+            # 클래스별 Dice score 기록
+            class_dice_dict = {}
+            for class_name, class_dice in zip(CLASSES, dices_per_class):
+                class_dice_dict[f"valid/dice_{class_name}"] = class_dice.item()
+            wandb.log(class_dice_dict)
+            
+            # 데이터가 충분히 쌓였을 때만 그래프 그리기
+            if len(epoch_history) > 0:
+                # 각 클래스별 다이스 스코어 히스토리를 리스트로 구성
+                ys_data = []
+                for class_name in CLASSES:
+                    ys_data.append(dice_history[class_name])
                 
-                # Wandb에 검증 지표와 모델 파일 기록
-                if wandb is not None:
-                    # 전체 Dice score 기록
-                    wandb.log({
-                        "valid/mean_dice": dice,
-                        "valid/epoch": epoch,
-                    })
-                    
-                    # 클래스별 Dice score 기록
-                    for class_name, class_dice in zip(CLASSES, dices_per_class):
-                        wandb.log({
-                            f"valid/dice_{class_name}": class_dice.item(),
-                            "valid/epoch": epoch
-                        })
-                    
-                    # Best 모델 파일 저장
-                    wandb.save(model_path)
-                    
-                    # 클래스별 Dice score를 하나의 그래프로 시각화
-                    wandb.log({
-                        "valid/class_wise_dice": wandb.plot.line_series(
-                            xs=[epoch] * len(CLASSES),
-                            ys=[[d.item() for d in dices_per_class]],
-                            keys=CLASSES,
-                            title="Class-wise Dice Scores",
-                            xname="epoch"
-                        )
-                    })
-
+                wandb.log({
+                    "valid/class_wise_dice": wandb.plot.line_series(
+                        xs=epoch_history,
+                        ys=ys_data,  # 각 클래스별 히스토리를 별도의 리스트로 전달
+                        keys=CLASSES,
+                        title="Class-wise Dice Scores",
+                        xname="Epoch"
+                    )
+                })
+                        
 def validation(epoch, model, data_loader, criterion, thr=0.5):
     print(f'Start validation #{epoch:2d}')
     model.eval()
