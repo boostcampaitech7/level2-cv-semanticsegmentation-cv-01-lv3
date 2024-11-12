@@ -8,7 +8,10 @@ import torch.nn.functional as F
 from utils.dataset import CLASSES
 from utils.method import dice_coef
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name):
+# Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
+import wandb
+
+def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, wandb=None):
     print('Start training..')
     
     best_dice = 0.
@@ -32,15 +35,53 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                     f'Step [{step+1}/{len(data_loader)}], '
                     f'Loss: {round(loss.item(),4)}'
                 )
-                
+            
+            # Wandb에 학습 지표 기록
+            if wandb is not None:
+                wandb.log({
+                    "train/loss": loss.item(),
+                    "train/step": epoch * len(data_loader) + step,
+                    "train/epoch": epoch,
+                })
+            
+        # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
-            dice = validation(epoch + 1, model, val_loader, criterion)
+            dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)  # validation 함수가 class별 dice도 반환하도록 수정
             
             if best_dice < dice:
                 print(f"Best performance at epoch: {epoch + 1}, {best_dice:.4f} -> {dice:.4f}")
                 print(f"Save model in {saved_dir}")
                 best_dice = dice
-                save_model(model, f"{model_name}.pt", saved_dir)
+                model_path = save_model(model, f"{model_name}.pt", saved_dir)
+                
+                # Wandb에 검증 지표와 모델 파일 기록
+                if wandb is not None:
+                    # 전체 Dice score 기록
+                    wandb.log({
+                        "valid/mean_dice": dice,
+                        "valid/epoch": epoch,
+                    })
+                    
+                    # 클래스별 Dice score 기록
+                    for class_name, class_dice in zip(CLASSES, dices_per_class):
+                        wandb.log({
+                            f"valid/dice_{class_name}": class_dice.item(),
+                            "valid/epoch": epoch
+                        })
+                    
+                    # Best 모델 파일 저장
+                    wandb.save(model_path)
+                    
+                    # 클래스별 Dice score를 하나의 그래프로 시각화
+                    wandb.log({
+                        "valid/class_wise_dice": wandb.plot.line_series(
+                            xs=[epoch] * len(CLASSES),
+                            ys=[[d.item() for d in dices_per_class]],
+                            keys=CLASSES,
+                            title="Class-wise Dice Scores",
+                            xname="epoch"
+                        )
+                    })
 
 def validation(epoch, model, data_loader, criterion, thr=0.5):
     print(f'Start validation #{epoch:2d}')
@@ -87,13 +128,12 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
     
     avg_dice = torch.mean(dices_per_class).item()
     
-    return avg_dice
-
-
+    return avg_dice, dices_per_class  # class별 dice도 함께 반환
 
 def save_model(model, model_name, saved_dir):
     output_path = os.path.join(saved_dir, f"{model_name}.pt")
     torch.save(model, output_path)
+    return output_path  # 저장된 모델 경로 반환
 
 def set_seed(seed=21):
     torch.manual_seed(seed)
