@@ -8,8 +8,13 @@ import torch.nn.functional as F
 from utils.dataset import CLASSES
 from utils.method import dice_coef
 
+
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
+# matplotlib import(#3 commit, deamin, 2024.11.12)
+import matplotlib.pyplot as plt
+# plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
+import plotly.graph_objects as go
 
 def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, wandb=None):
     print('Start training..')
@@ -59,13 +64,13 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 model_path = save_model(model, f"{model_name}.pt", saved_dir)
                 # Best 모델 파일 저장
                 wandb.save(model_path)
-            
+                
             # Wandb에 검증 지표와 모델 파일 기록
             # 히스토리 업데이트
             epoch_history.append(epoch)
             for class_name, class_dice in zip(CLASSES, dices_per_class):
                     dice_history[class_name].append(class_dice.item())
-            
+                
             # 기본 메트릭 로깅
             wandb.log({
                 "valid/mean_dice": dice,
@@ -77,23 +82,62 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             for class_name, class_dice in zip(CLASSES, dices_per_class):
                 class_dice_dict[f"valid/dice_{class_name}"] = class_dice.item()
             wandb.log(class_dice_dict)
-            
+
             # 데이터가 충분히 쌓였을 때만 그래프 그리기
             if len(epoch_history) > 0:
-                # 각 클래스별 다이스 스코어 히스토리를 리스트로 구성
-                ys_data = []
-                for class_name in CLASSES:
-                    ys_data.append(dice_history[class_name])
+
+                fig = go.Figure()
                 
-                wandb.log({
-                    "valid/class_wise_dice": wandb.plot.line_series(
-                        xs=epoch_history,
-                        ys=ys_data,  # 각 클래스별 히스토리를 별도의 리스트로 전달
-                        keys=CLASSES,
-                        title="Class-wise Dice Scores",
-                        xname="Epoch"
-                    )
-                })
+                # 색상 팔레트 생성
+                colors = plt.cm.rainbow(np.linspace(0, 1, len(CLASSES)))
+                
+                # 각 클래스별 라인 추가
+                for idx, (class_name, color) in enumerate(zip(CLASSES, colors)):
+                    # RGB 색상을 hex 코드로 변환
+                    hex_color = f'#{int(color[0]*255):02x}{int(color[1]*255):02x}{int(color[2]*255):02x}'
+                    
+                    # 라인 스타일 설정
+                    dash_style = 'solid' if idx % 2 == 0 else 'dash'
+                    
+                    fig.add_trace(go.Scatter(
+                        x=epoch_history,
+                        y=dice_history[class_name],
+                        name=class_name,
+                        line=dict(color=hex_color, dash=dash_style, width=2),
+                        mode='lines+markers',
+                        marker=dict(
+                            symbol=['circle', 'square', 'diamond', 'triangle-up', 'cross'][idx % 5],
+                            size=6
+                        )
+                    ))
+                
+                # 레이아웃 설정
+                fig.update_layout(
+                    title='Class-wise Dice Scores Over Time',
+                    xaxis_title='Epoch',
+                    yaxis_title='Dice Score',
+                    legend=dict(
+                        yanchor="top",
+                        y=1,
+                        xanchor="left",
+                        x=1.05,
+                        font=dict(size=10)
+                    ),
+                    showlegend=True,
+                    width=1000,
+                    height=600,
+                    plot_bgcolor='white',
+                    hovermode='x unified'
+                )
+                
+                # 그리드 추가
+                fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+                fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+                
+                # wandb에 로깅
+                wandb.log({"valid/class_wise_dice_scores": fig})
+
+            
                         
 def validation(epoch, model, data_loader, criterion, thr=0.5):
     print(f'Start validation #{epoch:2d}')
