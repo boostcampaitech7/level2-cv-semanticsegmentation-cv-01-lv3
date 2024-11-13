@@ -12,7 +12,8 @@ Bone Segmentation은 인공지능 분야에서 중요한 응용 분야 중 하�
 
 의료 교육에서도 활용될 수 있습니다. 의사들은 병태 및 부상에 대한 이해를 높이고 수술 계획을 개발하는 데 필요한 기술을 연습할 수 있습니다.
 
-![image](https://github.com/user-attachments/assets/0e81d993-bd4b-47d3-9fbd-c0aab27f2b9a)
+![image](https://github.com/user-attachments/assets/f7ee7a87-b032-4c5e-b391-438d08b79fe9)
+
 
 여러분에 의해 만들어진 우수한 성능의 모델은 질병 진단, 수술 계획, 의료 장비 제작, 의료 교육 등에 사용될 수 있을 것으로 기대됩니다. 🌎
 
