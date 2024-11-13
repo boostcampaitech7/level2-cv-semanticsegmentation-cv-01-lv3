@@ -14,7 +14,8 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
     best_dice = 0.
     for epoch in range(num_epochs):
         model.train()
-        for step, (images, masks) in enumerate(data_loader):
+        progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Training: Epoch [{epoch+1}/{num_epochs}]")
+        for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()
             model = model.cuda()
             
@@ -24,14 +25,8 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
-            if (step + 1) % 25 == 0:
-                print(
-                    f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | '
-                    f'Epoch [{epoch+1}/{num_epochs}], '
-                    f'Step [{step+1}/{len(data_loader)}], '
-                    f'Loss: {round(loss.item(),4)}'
-                )
+    
+            progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
                 
         if (epoch + 1) % val_every == 0:
             dice = validation(epoch + 1, model, val_loader, criterion)
@@ -48,11 +43,12 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
 
     dices = []
     with torch.no_grad():
+        progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Validation [{epoch}]")
         n_class = len(CLASSES)
         total_loss = 0
         cnt = 0
 
-        for step, (images, masks) in tqdm(enumerate(data_loader), total=len(data_loader)):
+        for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()         
             model = model.cuda()
             
@@ -75,6 +71,8 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
             
             dice = dice_coef(outputs, masks)
             dices.append(dice)
+            progress_bar.set_postfix(loss=round(loss.item(), 4), avg_loss=round(total_loss.item() / cnt, 4))
+
                 
     dices = torch.cat(dices, 0)
     dices_per_class = torch.mean(dices, 0)
