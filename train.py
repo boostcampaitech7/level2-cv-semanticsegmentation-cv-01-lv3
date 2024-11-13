@@ -8,6 +8,8 @@ from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
 
+# Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
+import wandb
 
 def parse_args():
     parser = argparse.ArgumentParser(description='X-Ray 이미지 세그멘테이션 학습')
@@ -24,16 +26,30 @@ def parse_args():
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=5,
+    parser.add_argument('--num_epochs', type=int, default=30,
                         help='총 에폭 수')
-    parser.add_argument('--val_every', type=int, default=5,
+    parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
     
+    # Wandb logging
+    parser.add_argument('--wandb_project', type=str, default='FCN_baseline_deamin',
+                        help='Wandb 프로젝트 이름')
+    parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
+                        help='Wandb 팀/조직 이름')
+
     return parser.parse_args()
 
 def main():
     args = parse_args()
     
+    # Wandb initalize
+    wandb.init(
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        name=args.model_name,
+        config=vars(args)
+    )
+
     if not os.path.exists(args.saved_dir):
         os.makedirs(args.saved_dir)
     
@@ -74,7 +90,7 @@ def main():
     
     # 학습 수행
     train(model, train_loader, valid_loader, criterion, optimizer, 
-          args.num_epochs, args.val_every, args.saved_dir, args.model_name)
+          args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb)
 
 if __name__ == '__main__':
     main()
