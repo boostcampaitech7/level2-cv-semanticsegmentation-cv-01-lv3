@@ -12,6 +12,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
     print('Start training..')
     
     best_dice = 0.
+    best_epoch = 0
     for epoch in range(num_epochs):
         model.train()
         progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Training: Epoch [{epoch+1}/{num_epochs}]")
@@ -34,8 +35,11 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             if best_dice < dice:
                 print(f"Best performance at epoch: {epoch + 1}, {best_dice:.4f} -> {dice:.4f}")
                 print(f"Save model in {saved_dir}")
+                if best_dice > 0:
+                    del_model(f"{model_name}_epoch_{best_epoch}_dice_{best_dice:.4f}",saved_dir)
                 best_dice = dice
-                save_model(model, f"{model_name}.pt", saved_dir)
+                best_epoch = epoch + 1
+                save_model(model, f"{model_name}_epoch_{epoch + 1}_dice_{dice:.4f}", saved_dir)
 
 def validation(epoch, model, data_loader, criterion, thr=0.5):
     print(f'Start validation #{epoch:2d}')
@@ -92,6 +96,11 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
 def save_model(model, model_name, saved_dir):
     output_path = os.path.join(saved_dir, f"{model_name}.pt")
     torch.save(model, output_path)
+
+def del_model(model_name, saved_dir):
+    prev_path = os.path.join(saved_dir, f"{model_name}.pt")
+    if os.path.exists(prev_path):
+        os.remove(prev_path) 
 
 def set_seed(seed=21):
     torch.manual_seed(seed)
