@@ -91,8 +91,6 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
     
     return avg_dice
 
-
-
 def save_model(model, model_name, saved_dir):
     output_path = os.path.join(saved_dir, f"{model_name}.pt")
     torch.save(model, output_path)
