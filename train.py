@@ -1,8 +1,10 @@
 import os
 import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import argparse
 import torch.nn as nn
 import torch.optim as optim
+import segmentation_models_pytorch as smp
 from torch.utils.data import DataLoader
 from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
@@ -33,10 +35,11 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='FCN_baseline_deamin',
+    parser.add_argument('--wandb_project', type=str, default='FCN_baseline',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
 
     return parser.parse_args()
 
@@ -49,7 +52,7 @@ def main():
     wandb.init(
         project=args.wandb_project,
         entity=args.wandb_entity,
-        name=args.model_name,
+        name=args.wandb_run_name,
         config=vars(args)
     )
 
@@ -62,12 +65,12 @@ def main():
     
     # 데이터셋 및 데이터로더 설정
     train_transform = A.Compose([
-        A.Resize(512, 512),
+        A.Resize(512,512)
     ])
-    
+
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
     valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=train_transform)
-    
+
     train_loader = DataLoader(
         dataset=train_dataset, 
         batch_size=args.batch_size,
@@ -86,9 +89,17 @@ def main():
         pin_memory=True
     )
     
-    # 모델 설정
-    model = models.segmentation.fcn_resnet50(pretrained=True)
-    model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
+    # Torchvision 사용 시 주석 처리 해제
+    #model = models.segmentation.fcn_resnet50(pretrained=True)
+    #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
+
+    # 모델 smp로 설정 (모델 변경 시 수정 필요)
+    model = smp.UPerNet(
+        encoder_name='efficientnet-b0', 
+        encoder_weights='imagenet', 
+        in_channels=3, 
+        classes=len(CLASSES)
+        )
     
     # Loss function과 optimizer 설정
     criterion = nn.BCEWithLogitsLoss()
