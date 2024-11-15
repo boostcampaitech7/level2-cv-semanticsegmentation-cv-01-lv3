@@ -40,7 +40,7 @@ def parse_args():
     
     parser.add_argument('--image_root', type=str, default='./data/test/DCM',
                         help='테스트 이미지가 있는 디렉토리 경로')
-    parser.add_argument('--model_path', type=str, default='./checkpoints/fcn_resnet50_best_model.pt',
+    parser.add_argument('--model_path', type=str, default='./checkpoints/fcn_resnet50.pt',
                         help='학습된 모델 파일 경로')
     parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
