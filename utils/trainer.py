@@ -20,14 +20,11 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
     print('Start training..')
     
     best_dice = 0.
-<<<<<<< HEAD
     best_epoch = 0
-=======
     # 클래스별 다이스 스코어 히스토리 저장을 위한 리스트 추가
     dice_history = {class_name: [] for class_name in CLASSES}
     epoch_history = []
     
->>>>>>> develop
     for epoch in range(num_epochs):
         model.train()
         progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Training: Epoch [{epoch+1}/{num_epochs}]")
@@ -41,19 +38,10 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-<<<<<<< HEAD
     
             progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
                 
-=======
             
-            if (step + 1) % 25 == 0:
-                print(
-                    f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | '
-                    f'Epoch [{epoch+1}/{num_epochs}], '
-                    f'Step [{step+1}/{len(data_loader)}], '
-                    f'Loss: {round(loss.item(),4)}'
-                )
             
             # Wandb에 학습 지표 기록
             if wandb is not None:
@@ -64,7 +52,6 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 })
             
         # 검증 주기마다 검증 수행
->>>>>>> develop
         if (epoch + 1) % val_every == 0:
             dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
             
@@ -74,11 +61,8 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 if best_dice > 0:
                     del_model(f"{model_name}_epoch_{best_epoch}_dice_{best_dice:.4f}",saved_dir)
                 best_dice = dice
-<<<<<<< HEAD
                 best_epoch = epoch + 1
-                save_model(model, f"{model_name}_epoch_{epoch + 1}_dice_{dice:.4f}", saved_dir)
-=======
-                model_path = save_model(model, f"{model_name}.pt", saved_dir)
+                model_path = save_model(model, f"{model_name}_epoch_{epoch + 1}_dice_{dice:.4f}", saved_dir)
                 # Best 모델 파일 저장
                 wandb.save(model_path)
                 
@@ -102,7 +86,6 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
 
             # 데이터가 충분히 쌓였을 때만 그래프 그리기
             if len(epoch_history) > 0:
->>>>>>> develop
 
                 fig = go.Figure()
                 
@@ -205,11 +188,7 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
     
     avg_dice = torch.mean(dices_per_class).item()
     
-<<<<<<< HEAD
-    return avg_dice
-=======
     return avg_dice, dices_per_class  # class별 dice도 함께 반환
->>>>>>> develop
 
 def save_model(model, model_name, saved_dir):
     output_path = os.path.join(saved_dir, f"{model_name}.pt")
