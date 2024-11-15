@@ -32,7 +32,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             images, masks = images.cuda(), masks.cuda()
             model = model.cuda()
             
-            outputs = model(images)['out']
+            outputs = model(images)
             loss = criterion(outputs, masks)
             
             optimizer.zero_grad()
@@ -155,7 +155,7 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
             images, masks = images.cuda(), masks.cuda()         
             model = model.cuda()
             
-            outputs = model(images)['out']
+            outputs = model(images)
             
             output_h, output_w = outputs.size(-2), outputs.size(-1)
             mask_h, mask_w = masks.size(-2), masks.size(-1)
@@ -200,7 +200,7 @@ def del_model(model_name, saved_dir):
     if os.path.exists(prev_path):
         os.remove(prev_path) 
 
-def set_seed(seed=21):
+def set_seed(seed=1):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

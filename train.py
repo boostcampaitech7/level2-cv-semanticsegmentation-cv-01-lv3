@@ -8,7 +8,7 @@ from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
 import time
-
+import segmentation_models_pytorch as smp
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
 
@@ -23,7 +23,7 @@ def parse_args():
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
@@ -33,7 +33,7 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='FCN_baseline_deamin',
+    parser.add_argument('--wandb_project', type=str, default='MA-Net',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
@@ -87,13 +87,22 @@ def main():
     )
     
     # 모델 설정
-    model = models.segmentation.fcn_resnet50(pretrained=True)
-    model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
-    
+    # model = models.segmentation.fcn_resnet50(pretrained=True)
+    # model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
+    model=smp.MAnet(
+        encoder_name ="efficientnet-b0",
+        encoder_weights="imagenet",
+        decoder_pab_channels=64,
+        in_channels = 3,
+        classes = 29
+    )
+
+
     # Loss function과 optimizer 설정
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
-    
+    # segmetataion pytorch
+
     # 학습 수행
     train(model, train_loader, valid_loader, criterion, optimizer, 
           args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb)
