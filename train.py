@@ -3,6 +3,7 @@ import albumentations as A
 import argparse
 import torch.nn as nn
 import torch.optim as optim
+import segmentation_models_pytorch as smp
 from torch.utils.data import DataLoader
 from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
@@ -18,11 +19,11 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='fcn_resnet50',
+    parser.add_argument('--model_name', type=str, default='resnet50',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
@@ -32,7 +33,7 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='FCN_baseline_deamin',
+    parser.add_argument('--wandb_project', type=str, default='U-net_baseline_kenlee',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
@@ -81,8 +82,16 @@ def main():
     )
     
     # 모델 설정
-    model = models.segmentation.fcn_resnet50(pretrained=True)
-    model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
+    #model = models.segmentation.fcn_resnet50(pretrained=True)
+    #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
+
+    # 모델 smp로 설정
+    model = smp.Unet(
+        encoder_name=args.model_name, 
+        encoder_weights='imagenet', 
+        in_channels=3, 
+        classes=len(CLASSES)
+        )
     
     # Loss function과 optimizer 설정
     criterion = nn.BCEWithLogitsLoss()
