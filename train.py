@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
+import time
 
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
@@ -42,6 +43,8 @@ def parse_args():
 def main():
     args = parse_args()
     
+    current_time = time.strftime("%m-%d_%H-%M-%S")
+    args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.model_name}")
     # Wandb initalize
     wandb.init(
         project=args.wandb_project,
@@ -52,6 +55,7 @@ def main():
 
     if not os.path.exists(args.saved_dir):
         os.makedirs(args.saved_dir)
+    print(f"Training Results will be saved in {args.saved_dir}!")
     
     # 시드 고정
     set_seed()
@@ -68,16 +72,18 @@ def main():
         dataset=train_dataset, 
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=2,
-        drop_last=True
+        num_workers=8,
+        drop_last=True,
+        pin_memory=True
     )
     
     valid_loader = DataLoader(
         dataset=valid_dataset, 
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=2,
-        drop_last=False
+        num_workers=8,
+        drop_last=False,
+        pin_memory=True
     )
     
     # 모델 설정

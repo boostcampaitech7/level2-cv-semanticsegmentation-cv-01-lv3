@@ -20,13 +20,15 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
     print('Start training..')
     
     best_dice = 0.
+    best_epoch = 0
     # 클래스별 다이스 스코어 히스토리 저장을 위한 리스트 추가
     dice_history = {class_name: [] for class_name in CLASSES}
     epoch_history = []
     
     for epoch in range(num_epochs):
         model.train()
-        for step, (images, masks) in enumerate(data_loader):
+        progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Training: Epoch [{epoch+1}/{num_epochs}]")
+        for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()
             model = model.cuda()
             
@@ -36,14 +38,10 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+    
+            progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
+                
             
-            if (step + 1) % 25 == 0:
-                print(
-                    f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | '
-                    f'Epoch [{epoch+1}/{num_epochs}], '
-                    f'Step [{step+1}/{len(data_loader)}], '
-                    f'Loss: {round(loss.item(),4)}'
-                )
             
             # Wandb에 학습 지표 기록
             if wandb is not None:
@@ -60,8 +58,11 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             if best_dice < dice:
                 print(f"Best performance at epoch: {epoch + 1}, {best_dice:.4f} -> {dice:.4f}")
                 print(f"Save model in {saved_dir}")
+                if best_dice > 0:
+                    del_model(f"{model_name}_epoch_{best_epoch}_dice_{best_dice:.4f}",saved_dir)
                 best_dice = dice
-                model_path = save_model(model, f"{model_name}.pt", saved_dir)
+                best_epoch = epoch + 1
+                model_path = save_model(model, f"{model_name}_epoch_{epoch + 1}_dice_{dice:.4f}", saved_dir)
                 # Best 모델 파일 저장
                 wandb.save(model_path)
                 
@@ -145,11 +146,12 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
 
     dices = []
     with torch.no_grad():
+        progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Validation [{epoch}]")
         n_class = len(CLASSES)
         total_loss = 0
         cnt = 0
 
-        for step, (images, masks) in tqdm(enumerate(data_loader), total=len(data_loader)):
+        for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()         
             model = model.cuda()
             
@@ -172,6 +174,8 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
             
             dice = dice_coef(outputs, masks)
             dices.append(dice)
+            progress_bar.set_postfix(loss=round(loss.item(), 4), avg_loss=round(total_loss.item() / cnt, 4))
+
                 
     dices = torch.cat(dices, 0)
     dices_per_class = torch.mean(dices, 0)
@@ -190,6 +194,11 @@ def save_model(model, model_name, saved_dir):
     output_path = os.path.join(saved_dir, f"{model_name}.pt")
     torch.save(model, output_path)
     return output_path  # 저장된 모델 경로 반환
+
+def del_model(model_name, saved_dir):
+    prev_path = os.path.join(saved_dir, f"{model_name}.pt")
+    if os.path.exists(prev_path):
+        os.remove(prev_path) 
 
 def set_seed(seed=21):
     torch.manual_seed(seed)
