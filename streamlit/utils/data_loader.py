@@ -2,27 +2,32 @@ import os
 from PIL import Image
 import json
 
+# commit 
+import pandas as pd
+
 class DataLoader:
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, mode='train'):
         self.data_dir = data_dir
-        self.images_dir = os.path.join(data_dir, "train", "DCM")
-        self.json_dir = os.path.join(data_dir, "train", "outputs_json")
-    
+        self.mode = mode
+        self.images_dir = os.path.join(data_dir, mode, "DCM")
+        # test 모드에서는 json 디렉토리를 설정하지 않음
+        self.json_dir = os.path.join(data_dir, mode, "outputs_json") if mode == 'train' else None
+        
     def get_image_list(self):
         image_files = []
-        print(f"Searching in directory: {self.images_dir}")  # 검색 디렉토리 출력
+        # print(f"Searching in directory: {self.images_dir}")  # 검색 디렉토리 출력
         
         for root, dirs, files in os.walk(self.images_dir):
-            print(f"Current directory: {root}")  # 현재 검색 중인 디렉토리
-            print(f"Found directories: {dirs}")  # 발견된 하위 디렉토리들
-            print(f"Found files: {files}")  # 발견된 파일들
+            # print(f"Current directory: {root}")  # 현재 검색 중인 디렉토리
+            # print(f"Found directories: {dirs}")  # 발견된 하위 디렉토리들
+            # print(f"Found files: {files}")  # 발견된 파일들
             
             for f in files:
                 if f.endswith('.png'):
                     rel_path = os.path.relpath(root, self.images_dir)
                     full_path = os.path.join(rel_path, f)
                     image_files.append(full_path)
-                    print(f"Added image: {full_path}")  # 추가된 이미지 경로
+                    # print(f"Added image: {full_path}")  # 추가된 이미지 경로
         
         return sorted(image_files)
     
@@ -30,11 +35,22 @@ class DataLoader:
         full_path = os.path.join(self.images_dir, image_path)
         return Image.open(full_path)
     
+    # # 모든 json 파일 경로를 한 번에 반환
+    # def get_json_list(self):
+    #     json_files = []
+    #     for root, dirs, files in os.walk(self.json_dir):
+    #         for f in files:
+    #             if f.endswith('.json'):
+    #                 json_files.append(os.path.join(root, f))
+    #     return sorted(json_files)
+
     def get_json_path(self, image_path):
+        if self.mode != 'train':
+            raise ValueError("JSON files are only available in train mode")
         image_dir, image_name = os.path.split(image_path)
         json_name = image_name.replace('.jpg', '.json').replace('.png', '.json')
         return os.path.join(self.json_dir, image_dir, json_name)
-    
+
     def load_json(self, json_path):
         with open(json_path, 'r') as f:
             return json.load(f)
@@ -45,7 +61,6 @@ class DataLoader:
         for file in image_files:
             # 파일의 디렉토리 경로와 파일명을 분리
             dir_path = os.path.dirname(file)
-            file_name = os.path.basename(file)
             
             # 같은 폴더에 있는 파일들을 쌍으로 묶음
             if dir_path not in pairs:
@@ -60,3 +75,8 @@ class DataLoader:
                 
         # L과 R 이미지가 모두 있는 쌍만 반환
         return {k: v for k, v in pairs.items() if v['L'] is not None and v['R'] is not None}
+    
+    def load_inference_csv(self, csv_path):
+        if self.mode != 'test':
+            raise ValueError("CSV files are only available in test mode")
+        return pd.read_csv(csv_path)

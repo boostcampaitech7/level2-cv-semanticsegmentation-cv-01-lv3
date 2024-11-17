@@ -1,6 +1,14 @@
 import numpy as np
 import cv2
 
+# commit
+import csv
+import sys
+csv.field_size_limit(sys.maxsize)  # 필드 크기 제한 증가
+
+# 클래스를 모듈 레벨에서 사용 가능하도록 export
+__all__ = ['MaskGenerator', 'PointCloudGenerator']
+
 # 색상 리스트
 PALETTE = [
     (220, 20, 60), (119, 11, 32), (0, 0, 142), (0, 0, 230), (106, 0, 228),
@@ -45,6 +53,131 @@ class MaskGenerator:
             rgb_mask[mask == i] = color
             
         return rgb_mask
+    
+    @staticmethod
+    def decode_rle_to_mask(rle, height, width):
+        """
+        RLE 인코딩된 마스크를 디코딩합니다.
+        Args:
+            rle: RLE 인코딩된 문자열
+            height: 출력 이미지의 높이
+            width: 출력 이미지의 너비
+        Returns:
+            디코딩된 마스크 (height x width)
+        """
+        s = rle.split()
+        # s[0::2], s[1::2]로 수정하여 더 명확하게 표현
+        starts, lengths = [np.asarray(x, dtype=int) for x in (s[0::2], s[1::2])]
+        starts -= 1  # 1-based index를 0-based index로 변환
+        ends = starts + lengths
+        img = np.zeros(height * width, dtype=np.uint8)
+        
+        for lo, hi in zip(starts, ends):
+            img[lo:hi] = 1
+        
+        return img.reshape(height, width)
+    
+    @staticmethod
+    def load_and_process_masks(data_loader, csv_path, image_name, image_shape):  # self 파라미터 제거
+        # CSV 파일 로드
+        df = data_loader.load_inference_csv(csv_path)
+        #print(df)
+        # 선택된 이미지에 대한 마스크 정보만 필터링
+        image_masks = df[df['image_name'] == image_name]
+        print(image_name)
+        print(image_masks)
+        # 전체 마스크 초기화
+        combined_mask = np.zeros(image_shape[:2], dtype=np.uint8)
+        
+        # 각 클래스별 마스크 생성 및 결합
+        for _, row in image_masks.iterrows():
+            class_name = row['class']
+            rle = row['rle']
+            class_idx = CLASSES.index(class_name) + 1
+            print(rle)
+            
+            # RLE 디코딩
+            class_mask = MaskGenerator.decode_rle_to_mask(rle, image_shape[0], image_shape[1])
+            combined_mask[class_mask == 1] = class_idx
+        
+        return combined_mask
 
-# 클래스를 모듈 레벨에서 사용 가능하도록 export
-__all__ = ['MaskGenerator']
+class PointCloudGenerator:
+    @staticmethod
+    def create_point_cloud_from_json(json_data, image_shape, alpha=0.1):
+        # 포인트 클라우드를 저장할 이미지 생성
+        point_cloud = np.zeros((*image_shape[:2], 3), dtype=np.float32)
+        
+        # annotation의 폴리곤 채우기
+        for annotation in json_data['annotations']:
+            points = np.array(annotation['points'])
+            class_name = annotation['label']
+            class_idx = CLASSES.index(class_name)
+            
+            # 임시 마스크 생성
+            temp_mask = np.zeros(image_shape[:2], dtype=np.uint8)
+            
+            # 폴리곤 채우기
+            cv2.fillPoly(temp_mask, [points.astype(np.int32)], 1)
+            
+            # 색상 적용
+            for i in range(3):
+                point_cloud[:, :, i][temp_mask == 1] = PALETTE[class_idx][i] * alpha
+        
+        return point_cloud.astype(np.uint8)
+
+    @staticmethod
+    def overlay_multiple_point_clouds(point_clouds):
+        """여러 이미지의 폴리곤을 하나로 합치기"""
+        if not point_clouds:
+            return None
+            
+        result = np.zeros_like(point_clouds[0], dtype=np.float32)
+        
+        # 모든 폴리곤 합치기
+        for cloud in point_clouds:
+            mask = (cloud > 0).any(axis=2)
+            result[mask] += cloud[mask]
+            
+        # 값 범위 조정 및 타입 변환
+        result = np.clip(result, 0, 255).astype(np.uint8)
+        return result
+    
+    @staticmethod
+    def mask_to_rgb(mask):
+        # RGB 마스크 생성
+        rgb_mask = np.zeros((*mask.shape, 3), dtype=np.uint8)
+        
+        # 각 클래스별로 해당하는 색상 적용
+        for i, color in enumerate(PALETTE, start=1):  # 1부터 시작 (0은 배경)
+            rgb_mask[mask == i] = color
+            
+        return rgb_mask
+    
+    @staticmethod
+    def create_class_point_cloud(json_data_list, image_shape, alpha=0.1):
+        """여러 이미지의 클래스별 포인트 클라우드 생성"""
+        # 클래스별 포인트 클라우드를 저장할 딕셔너리
+        class_clouds = {class_name: np.zeros((*image_shape[:2], 3), dtype=np.float32) 
+                       for class_name in CLASSES}
+        
+        # 모든 JSON 데이터에 대해 처리
+        for json_data in json_data_list:
+            for annotation in json_data['annotations']:
+                points = np.array(annotation['points'])
+                class_name = annotation['label']
+                class_idx = CLASSES.index(class_name)
+                
+                # 임시 마스크 생성
+                temp_mask = np.zeros(image_shape[:2], dtype=np.uint8)
+                cv2.fillPoly(temp_mask, [points.astype(np.int32)], 1)
+                
+                # 해당 클래스의 포인트 클라우드에 추가
+                for i in range(3):
+                    class_clouds[class_name][:, :, i][temp_mask == 1] += PALETTE[class_idx][i] * alpha
+        
+        # 각 클래스별 포인트 클라우드 정규화
+        for class_name in CLASSES:
+            class_clouds[class_name] = np.clip(class_clouds[class_name], 0, 255).astype(np.uint8)
+            
+        return class_clouds
