@@ -21,7 +21,7 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='fcn_resnet50',
+    parser.add_argument('--model_name', type=str, default='Unet',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
@@ -35,11 +35,11 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='MA-Net',
+    parser.add_argument('--wandb_project', type=str, default='Unet_Aug',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='crop_1750,1750', help='WandB Run 이름')
 
     return parser.parse_args()
 
@@ -65,11 +65,18 @@ def main():
     
     # 데이터셋 및 데이터로더 설정
     train_transform = A.Compose([
+        A.CropNonEmptyMaskIfExists(height=1750, width=1750, p=0.5), # 
+        # A.ShiftScaleRotate(shift_limit = (-0.01, 0.01),
+                        #    scale_limit = (-250 . ))
+        A.Resize(512,512),
+    ])
+
+    val_transform = A.Compose([
         A.Resize(512,512)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
-    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=train_transform)
+    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=val_transform)
 
     train_loader = DataLoader(
         dataset=train_dataset, 
@@ -92,13 +99,13 @@ def main():
     # 모델 설정
     # model = models.segmentation.fcn_resnet50(pretrained=True)
     # model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
-    model=smp.MAnet(
-        encoder_name ="efficientnet-b0",
-        encoder_weights="imagenet",
-        decoder_pab_channels=64,
-        in_channels = 3,
-        classes = 29
+    model = smp.Unet(
+        encoder_name="efficientnet-b0", 
+        encoder_weights='imagenet', 
+        in_channels=3, 
+        classes=len(CLASSES)
     )
+
 
 
     # Loss function과 optimizer 설정
@@ -107,7 +114,7 @@ def main():
     # segmetataion pytorch
 
     # 학습 수행
-    train(model, train_loader, valid_loader, criterion, optimizer, 
+    train(model, train_loader, valid_loader,criterion, optimizer, 
           args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb)
 
 if __name__ == '__main__':

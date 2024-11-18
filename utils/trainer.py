@@ -7,7 +7,9 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from utils.dataset import CLASSES
 from utils.method import dice_coef
-
+import torch.nn as nn
+import torch.optim as optim
+from torch.optim.lr_scheduler import MultiStepLR
 
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
@@ -16,7 +18,7 @@ import matplotlib.pyplot as plt
 # plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
 import plotly.graph_objects as go
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, wandb=None):
+def train(model, data_loader, val_loader,criterion, optimizer,  num_epochs,val_every, saved_dir, model_name, wandb=None):
     print('Start training..')
     
     best_dice = 0.
@@ -24,7 +26,10 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
     # 클래스별 다이스 스코어 히스토리 저장을 위한 리스트 추가
     dice_history = {class_name: [] for class_name in CLASSES}
     epoch_history = []
-    
+    # iteration lr
+    total_iter = len(data_loader) * num_epochs
+
+    # scheduler = MultiStepLR(optimizer , milestones=[10,20,30])
     for epoch in range(num_epochs):
         model.train()
         progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Training: Epoch [{epoch+1}/{num_epochs}]")
@@ -35,14 +40,15 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 outputs = model(images)['out']
             except:
                 outputs = model(images)
+
             loss = criterion(outputs, masks)
-            
+             # 학습률 계산
+  
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
     
             progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
-                
             
             
             # Wandb에 학습 지표 기록
@@ -52,7 +58,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                     "train/step": epoch * len(data_loader) + step,
                     "train/epoch": epoch,
                 })
-            
+        # scheduler.step()    
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
             dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
