@@ -29,7 +29,7 @@ def parse_args():
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=200,
                         help='총 에폭 수')
     parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
