@@ -1,5 +1,6 @@
 import os
 import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import argparse
 import torch.nn as nn
 import torch.optim as optim
@@ -20,7 +21,7 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='resnet50',
+    parser.add_argument('--model_name', type=str, default='unet_elastic_100_50_15_20',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
@@ -28,7 +29,7 @@ def parse_args():
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=100,
                         help='총 에폭 수')
     parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
@@ -64,11 +65,29 @@ def main():
     # 데이터셋 및 데이터로더 설정
     train_transform = A.Compose([
         A.Resize(512, 512),
+        #A.Rotate(limit = 10, p = 0.5),
+        # A.Flip(p=0.5),
+        # A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.5, border_mode=0),
+        A.ElasticTransform(p=0.5, alpha=50, sigma=15, alpha_affine=20),
+        # A.OneOf(
+        #     [
+        #         A.GaussNoise(p=0.5),
+        #         A.RandomBrightnessContrast(p=0.5),
+        #         A.RandomGamma(p=0.5)
+        #     ],
+        #     p=0.3
+        # )
+        ToTensorV2()
     ])
-    
+
+    valid_transform = A.Compose([
+        A.Resize(512, 512),
+        ToTensorV2()
+    ])
+
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
-    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=train_transform)
-    
+    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=valid_transform)
+
     train_loader = DataLoader(
         dataset=train_dataset, 
         batch_size=args.batch_size,
@@ -93,7 +112,7 @@ def main():
 
     # 모델 smp로 설정
     model = smp.Unet(
-        encoder_name=args.model_name, 
+        encoder_name='efficientnet-b0', 
         encoder_weights='imagenet', 
         in_channels=3, 
         classes=len(CLASSES)

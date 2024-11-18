@@ -1,3 +1,4 @@
+import albumentations as A
 import os
 import cv2
 import json
@@ -111,12 +112,16 @@ class XRayDataset(Dataset):
             transformed = self.transforms(image=image, mask=label)
             image = transformed["image"]
             label = transformed["mask"]
-            
-        image = image.transpose(2, 0, 1)
-        label = label.transpose(2, 0, 1)
         
-        image = torch.from_numpy(image).float()
-        label = torch.from_numpy(label).float()
+        image = image.float()
+        label = label.float()
+        
+        label = label.permute(2,0,1)
+        # image = image.transpose(2, 0, 1)
+        # label = label.transpose(2, 0, 1)
+
+        # image = torch.from_numpy(image).float()
+        # label = torch.from_numpy(label).float()
             
         return image, label
     

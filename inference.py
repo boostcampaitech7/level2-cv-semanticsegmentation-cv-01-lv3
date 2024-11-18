@@ -21,7 +21,7 @@ def test(model, data_loader, thr=0.5):
     with torch.no_grad():
         for step, (images, image_names) in tqdm(enumerate(data_loader), total=len(data_loader)):
             images = images.cuda()    
-            outputs = model(images)['out']
+            outputs = model(images)
             
             outputs = F.interpolate(outputs, size=(2048, 2048), mode="bilinear")
             outputs = torch.sigmoid(outputs)
@@ -40,13 +40,13 @@ def parse_args():
     
     parser.add_argument('--image_root', type=str, default='./data/test/DCM',
                         help='테스트 이미지가 있는 디렉토리 경로')
-    parser.add_argument('--model_path', type=str, default='./checkpoints/fcn_resnet50.pt',
+    parser.add_argument('--model_path', type=str, default='/data/ephemeral/home/kenlee/level2-cv-semanticsegmentation-cv-01-lv3/checkpoints/11-15_04-50-33_resnet50/resnet50_epoch_30_dice_0.9607.pt',
                         help='학습된 모델 파일 경로')
-    parser.add_argument('--batch_size', type=int, default=2,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='배치 크기')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='세그멘테이션 임계값')
-    parser.add_argument('--output_path', type=str, default='output.csv',
+    parser.add_argument('--output_path', type=str, default='output_unet_base.csv',
                         help='결과 저장할 CSV 파일 경로')
     parser.add_argument('--img_size', type=int, default=512,
                         help='입력 이미지 크기')

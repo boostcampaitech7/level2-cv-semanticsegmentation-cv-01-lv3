@@ -37,6 +37,9 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             #unet 모델 출력
             outputs = model(images)
 
+            print(outputs.shape)
+            print(masks.shape)
+
             loss = criterion(outputs, masks)
             
             optimizer.zero_grad()
@@ -207,7 +210,7 @@ def del_model(model_name, saved_dir):
     if os.path.exists(prev_path):
         os.remove(prev_path) 
 
-def set_seed(seed=21):
+def set_seed(seed=1):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
