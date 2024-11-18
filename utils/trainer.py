@@ -96,6 +96,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             
             # Wandb logging
             wandb.log({
+                # validation loss 추가
                 "valid/loss": val_loss,
                 "valid/mean_dice": dice,
                 "valid/epoch": epoch,
