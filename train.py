@@ -35,11 +35,11 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='FCN_baseline',
+    parser.add_argument('--wandb_project', type=str, default='UPerNet_Kenlee',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='', help='encoder_name')
 
     return parser.parse_args()
 
