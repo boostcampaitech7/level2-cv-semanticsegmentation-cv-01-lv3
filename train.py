@@ -29,7 +29,7 @@ def parse_args():
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=200,
+    parser.add_argument('--num_epochs', type=int, default=30,
                         help='총 에폭 수')
     parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
@@ -101,8 +101,8 @@ def main():
     #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
 
     # 모델 smp로 설정 (모델 변경 시 수정 필요)
-    model = smp.UnetPlusPlus(
-        encoder_name='resnet18', 
+    model = smp.UPerNet(
+        encoder_name='efficientnet-b0', 
         encoder_weights='imagenet', 
         in_channels=3, 
         classes=len(CLASSES)
