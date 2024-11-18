@@ -29,7 +29,7 @@ def parse_args():
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=200,
                         help='총 에폭 수')
     parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
@@ -40,8 +40,15 @@ def parse_args():
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
     parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
-
-    return parser.parse_args()
+    
+    # Early stopping 관련 인자 수정
+    parser.add_argument('--early_stopping', type=bool, default=True,
+                      help='Enable early stopping (default: True)')
+    parser.add_argument('--patience', type=int, default=5,
+                      help='Early stopping patience (default: 5)')
+    
+    args = parser.parse_args()
+    return args
 
 def main():
     args = parse_args()
@@ -94,8 +101,8 @@ def main():
     #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
 
     # 모델 smp로 설정 (모델 변경 시 수정 필요)
-    model = smp.UPerNet(
-        encoder_name='efficientnet-b0', 
+    model = smp.UnetPlusPlus(
+        encoder_name='resnet18', 
         encoder_weights='imagenet', 
         in_channels=3, 
         classes=len(CLASSES)

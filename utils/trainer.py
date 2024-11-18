@@ -16,12 +16,19 @@ import matplotlib.pyplot as plt
 # plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
 import plotly.graph_objects as go
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, wandb=None):
+def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None):
     print('Start training..')
+    if early_stopping:
+        print(f'Early stopping enabled with patience {patience}')
     
     best_dice = 0.
+    best_loss = float('inf')  # 최소 loss 초기화
     best_epoch = 0
-    # 클래스별 다이스 스코어 히스토리 저장을 위한 리스트 추가
+    # Early stopping 관련 변수
+    early_stopping_counter = 0
+    best_model_state = None
+    
+    # 클래스별 다이스 스코어 히스토리 저장을 위한 리스트
     dice_history = {class_name: [] for class_name in CLASSES}
     epoch_history = []
     
@@ -55,31 +62,50 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
-            dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
+            val_loss, dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
             
-            if best_dice < dice:
-                print(f"Best performance at epoch: {epoch + 1}, {best_dice:.4f} -> {dice:.4f}")
+            # Early stopping 체크 (loss 기준)
+            if early_stopping:
+                if val_loss < best_loss:
+                    print(f"Best validation loss at epoch: {epoch + 1}, {best_loss:.4f} -> {val_loss:.4f}")
+                    best_loss = val_loss
+                    best_model_state = model.state_dict().copy()
+                    early_stopping_counter = 0
+                else:
+                    early_stopping_counter += 1
+                    print(f'Early stopping counter: {early_stopping_counter}/{patience}')
+                    
+                    if early_stopping_counter >= patience:
+                        print(f'Early stopping triggered at epoch {epoch + 1}')
+                        # 최고 성능 모델로 복원
+                        model.load_state_dict(best_model_state)
+                        if wandb:
+                            wandb.finish()
+                        return
+            
+            # Best dice 모델 저장 
+            if dice > best_dice:
+                print(f"Best dice score at epoch: {epoch + 1}, {best_dice:.4f} -> {dice:.4f}")
                 print(f"Save model in {saved_dir}")
                 if best_dice > 0:
-                    del_model(f"{model_name}_epoch_{best_epoch}_dice_{best_dice:.4f}",saved_dir)
+                    del_model(f"{model_name}_epoch_{best_epoch}_dice_{best_dice:.4f}", saved_dir)
                 best_dice = dice
                 best_epoch = epoch + 1
                 model_path = save_model(model, f"{model_name}_epoch_{epoch + 1}_dice_{dice:.4f}", saved_dir)
-                # Best 모델 파일 저장
                 wandb.save(model_path)
-                
-            # Wandb에 검증 지표와 모델 파일 기록
+            
+            # Wandb logging
+            wandb.log({
+                "valid/loss": val_loss,
+                "valid/mean_dice": dice,
+                "valid/epoch": epoch,
+            })
+            
             # 히스토리 업데이트
             epoch_history.append(epoch)
             for class_name, class_dice in zip(CLASSES, dices_per_class):
                     dice_history[class_name].append(class_dice.item())
                 
-            # 기본 메트릭 로깅
-            wandb.log({
-                "valid/mean_dice": dice,
-                "valid/epoch": epoch,
-            })
-            
             # 클래스별 Dice score 기록
             class_dice_dict = {}
             for class_name, class_dice in zip(CLASSES, dices_per_class):
@@ -147,11 +173,12 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
     model.eval()
 
     dices = []
+    total_loss = 0
+    cnt = 0
+    
     with torch.no_grad():
         progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Validation [{epoch}]")
         n_class = len(CLASSES)
-        total_loss = 0
-        cnt = 0
 
         for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()         
@@ -169,7 +196,7 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
                 outputs = F.interpolate(outputs, size=(mask_h, mask_w), mode="bilinear")
             
             loss = criterion(outputs, masks)
-            total_loss += loss
+            total_loss += loss.item()
             cnt += 1
             
             outputs = torch.sigmoid(outputs)
@@ -178,9 +205,9 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
             
             dice = dice_coef(outputs, masks)
             dices.append(dice)
-            progress_bar.set_postfix(loss=round(loss.item(), 4), avg_loss=round(total_loss.item() / cnt, 4))
-
+            progress_bar.set_postfix(loss=round(loss.item(), 4), avg_loss=round(total_loss / cnt, 4))
                 
+    avg_loss = total_loss / cnt
     dices = torch.cat(dices, 0)
     dices_per_class = torch.mean(dices, 0)
     dice_str = [
@@ -192,7 +219,7 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
     
     avg_dice = torch.mean(dices_per_class).item()
     
-    return avg_dice, dices_per_class  # class별 dice도 함께 반환
+    return avg_loss, avg_dice, dices_per_class  # loss를 첫 번째 반환값으로 추가
 
 def save_model(model, model_name, saved_dir):
     output_path = os.path.join(saved_dir, f"{model_name}.pt")
