@@ -15,12 +15,11 @@ class DataLoader:
         
     def get_image_list(self):
         image_files = []
-        # print(f"Searching in directory: {self.images_dir}")  # 검색 디렉토리 출력
         
         for root, dirs, files in os.walk(self.images_dir):
-            # print(f"Current directory: {root}")  # 현재 검색 중인 디렉토리
-            # print(f"Found directories: {dirs}")  # 발견된 하위 디렉토리들
-            # print(f"Found files: {files}")  # 발견된 파일들
+            print(f"Current directory: {root}")  # 현재 검색 중인 디렉토리
+            print(f"Found directories: {dirs}")  # 발견된 하위 디렉토리들
+            print(f"Found files: {files}")  # 발견된 파일들
             
             for f in files:
                 if f.endswith('.png'):
@@ -34,15 +33,6 @@ class DataLoader:
     def load_image(self, image_path):
         full_path = os.path.join(self.images_dir, image_path)
         return Image.open(full_path)
-    
-    # # 모든 json 파일 경로를 한 번에 반환
-    # def get_json_list(self):
-    #     json_files = []
-    #     for root, dirs, files in os.walk(self.json_dir):
-    #         for f in files:
-    #             if f.endswith('.json'):
-    #                 json_files.append(os.path.join(root, f))
-    #     return sorted(json_files)
 
     def get_json_path(self, image_path):
         if self.mode != 'train':

@@ -15,10 +15,11 @@ def main():
     # 데이터 로더 초기화
     data_loader = DataLoader("../data/", mode='test')
     
-    # CSV 파일 선택
-    csv_files = [f for f in os.listdir("../") if f.endswith('_output.csv')]
+    # prediction 폴더 내의 CSV 파일 선택
+    prediction_dir = os.path.join("../", "prediction")
+    csv_files = [f for f in os.listdir(prediction_dir) if f.endswith('.csv')]
     selected_csv = st.selectbox("CSV 파일 선택", csv_files)
-    csv_path = os.path.join("..", selected_csv)
+    csv_path = os.path.join(prediction_dir, selected_csv)
     
     # 이미지 파일 목록 가져오기
     image_files = data_loader.get_image_list()
@@ -55,9 +56,6 @@ def main():
                 st.write(f"마스크의 최소/최대값: {mask_l.min()}, {mask_l.max()}")
             except Exception as e:
                 st.error(f"Left 이미지 마스크 처리 중 오류 발생: {str(e)}")
-                st.write("RLE 인코딩된 원본 데이터:")
-                mask_data = mask_generator.get_mask_data(csv_path, image_pairs[selected_pair]['L'].split('/')[-1])
-                st.write(mask_data)
                 st.image(image_l, caption="원본 이미지만 표시", use_column_width=True)
         
         # Right 이미지 처리
@@ -80,34 +78,7 @@ def main():
                 st.write(f"마스크의 최소/최대값: {mask_r.min()}, {mask_r.max()}")
             except Exception as e:
                 st.error(f"Right 이미지 마스크 처리 중 오류 발생: {str(e)}")
-                st.write("RLE 인코딩된 원본 데이터:")
-                mask_data = mask_generator.get_mask_data(csv_path, image_pairs[selected_pair]['R'].split('/')[-1])
-                st.write(mask_data)
                 st.image(image_r, caption="원본 이미지만 표시", use_column_width=True)
-    
-    # if selected_image and selected_csv:
-    #     # 이미지 로드
-    #     image = cv2.imread(os.path.join(data_loader.images_dir, selected_image))
-    #     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-    #     mask_generator = MaskGenerator()
-    #     # 마스크 생성
-    #     mask = mask_generator.load_and_process_masks(data_loader, csv_path, selected_image, image.shape)
-        
-    #     # RGB 마스크 생성
-    #     rgb_mask = mask_generator.mask_to_rgb(mask)
-        
-    #     # 이미지와 마스크 시각화
-    #     col1, col2 = st.columns(2)
-    #     with col1:
-    #         st.image(image, caption="원본 이미지", use_column_width=True)
-    #     with col2:
-    #         st.image(rgb_mask, caption="Segmentation 결과", use_column_width=True)
-        
-    #     # Blend된 결과 표시
-    #     alpha = 0.7
-    #     blended = cv2.addWeighted(image, alpha, rgb_mask, 1-alpha, 0)
-    #     st.image(blended, caption="Blended 결과", use_column_width=True)
 
 if __name__ == "__main__":
     main()
