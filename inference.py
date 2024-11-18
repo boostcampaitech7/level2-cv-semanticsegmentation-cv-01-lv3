@@ -42,13 +42,13 @@ def parse_args():
     
     parser.add_argument('--image_root', type=str, default='./data/test/DCM',
                         help='테스트 이미지가 있는 디렉토리 경로')
-    parser.add_argument('--model_path', type=str, default='./checkpoints/fcn_resnet50.pt',
+    parser.add_argument('--model_path', type=str, default='/data/ephemeral/home/kenlee/level2-cv-semanticsegmentation-cv-01-lv3/checkpoints/11-18_17-52-15_UPerNet_Exp_Loss/UPerNet_Exp_Loss_epoch_196_dice_0.9599.pt',
                         help='학습된 모델 파일 경로')
     parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='세그멘테이션 임계값')
-    parser.add_argument('--output_path', type=str, default='output.csv',
+    parser.add_argument('--output_path', type=str, default='DiceLoss.csv',
                         help='결과 저장할 CSV 파일 경로')
     parser.add_argument('--img_size', type=int, default=512,
                         help='입력 이미지 크기')

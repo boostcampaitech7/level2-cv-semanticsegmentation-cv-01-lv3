@@ -21,7 +21,7 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='fcn_resnet50',
+    parser.add_argument('--model_name', type=str, default='UPerNet_Exp_Loss',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
@@ -35,11 +35,11 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='UPerNet_Kenlee',
+    parser.add_argument('--wandb_project', type=str, default='UPerNet_Exp_Loss',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='', help='encoder_name')
+    parser.add_argument('--wandb_run_name', type=str, default='DiceLoss', help='encoder_name')
 
     return parser.parse_args()
 
@@ -102,7 +102,7 @@ def main():
         )
     
     # Loss function과 optimizer 설정
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = smp.losses.DiceLoss(mode = 'multilabel')
     optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
     
     # 학습 수행
