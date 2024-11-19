@@ -71,7 +71,7 @@ def main():
         dataset=test_dataset, 
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=2,
+        num_workers=8,
         drop_last=False
     )
     
