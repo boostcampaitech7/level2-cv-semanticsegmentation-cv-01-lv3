@@ -21,7 +21,7 @@ from colorspacious import cspace_converter
 # Hook import(Feature:#7 Hook 적용, deamin, 2024.11.14)
 from utils.hook import FeatureExtractor
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None):
+def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None, scheduler=None):
     print('Start training..')
     if early_stopping:
         print(f'Early stopping enabled with patience {patience}')
@@ -48,11 +48,14 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             except:
                 outputs = model(images)
             loss = criterion(outputs, masks)
-            
-            optimizer.zero_grad()
             loss.backward()
+            optimizer.zero_grad()
+            
             optimizer.step()
-    
+            if scheduler is not None:
+                current_lr = scheduler.get_last_lr()[0]
+                wandb.log({"learning_rate": current_lr})  # global_step 사용
+                scheduler.step()
             progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
                 
             
