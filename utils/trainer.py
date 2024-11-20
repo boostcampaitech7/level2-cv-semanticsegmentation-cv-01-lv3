@@ -16,6 +16,11 @@ import matplotlib.pyplot as plt
 # plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
 import plotly.graph_objects as go
 
+from colorspacious import cspace_converter
+
+# Hook import(Feature:#7 Hook 적용, deamin, 2024.11.14)
+from utils.hook import FeatureExtractor
+
 def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None):
     print('Start training..')
     if early_stopping:
@@ -63,7 +68,15 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
             val_loss, dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
-            
+            # validation 시작 전에 feature extractor 초기화
+            feature_extractor = FeatureExtractor(model)
+            # feature map 시각화 (validation 직후)
+            if feature_extractor is not None:
+                feature_extractor.visualize_features(
+                    wandb_logger=wandb,
+                    save_dir='./feature_maps',
+                    max_features=4
+                )
             # Early stopping 체크 (loss 기준)
             if early_stopping:
                 if val_loss < best_loss:
@@ -223,9 +236,26 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
     return avg_loss, avg_dice, dices_per_class  # loss를 첫 번째 반환값으로 추가
 
 def save_model(model, model_name, saved_dir):
-    output_path = os.path.join(saved_dir, f"{model_name}.pt")
-    torch.save(model, output_path)
-    return output_path  # 저장된 모델 경로 반환
+    """모델 저장 함수"""
+    output_path = os.path.join(saved_dir, model_name)
+    
+    # 현재 등록된 모든 forward hook 임시 제거
+    forward_hooks = {}
+    for k, v in model._forward_hooks.items():
+        forward_hooks[k] = v
+        v.remove()  # hook 제거
+    model._forward_hooks.clear()
+    
+    # 모델의 state_dict 저장
+    torch.save({
+        'model_state_dict': model.state_dict(),
+    }, output_path)
+    
+    # forward hook 복구
+    for k, v in forward_hooks.items():
+        model.register_forward_hook(v.hook_fn)
+    
+    return output_path
 
 def del_model(model_name, saved_dir):
     prev_path = os.path.join(saved_dir, f"{model_name}.pt")
