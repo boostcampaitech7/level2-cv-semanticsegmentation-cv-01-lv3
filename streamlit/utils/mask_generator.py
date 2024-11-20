@@ -78,14 +78,13 @@ class MaskGenerator:
         return img.reshape(height, width)
     
     @staticmethod
-    def load_and_process_masks(data_loader, csv_path, image_name, image_shape):  # self 파라미터 제거
+    def load_and_process_masks(data_loader, csv_path, image_name, image_shape, class_idx=None):  # self 파라미터 제거
         # CSV 파일 로드
         df = data_loader.load_inference_csv(csv_path)
         #print(df)
         # 선택된 이미지에 대한 마스크 정보만 필터링
         image_masks = df[df['image_name'] == image_name]
         print(image_name)
-        print(image_masks)
         # 전체 마스크 초기화
         combined_mask = np.zeros(image_shape[:2], dtype=np.uint8)
         
@@ -93,14 +92,34 @@ class MaskGenerator:
         for _, row in image_masks.iterrows():
             class_name = row['class']
             rle = row['rle']
-            class_idx = CLASSES.index(class_name) + 1
-            print(rle)
+            class_idx = class_idx if class_idx is not None else CLASSES.index(class_name) + 1
             
             # RLE 디코딩
             class_mask = MaskGenerator.decode_rle_to_mask(rle, image_shape[0], image_shape[1])
             combined_mask[class_mask == 1] = class_idx
         
         return combined_mask
+    
+    @staticmethod
+    def load_and_process_masks_by_class(data_loader, csv_path, image_name, image_shape, target_class):
+        """특정 클래스에 대한 마스크만 생성하는 함수"""
+        # CSV 파일 로드
+        df = data_loader.load_inference_csv(csv_path)
+        
+        # 선택된 이미지와 클래스에 대한 마스크 정보만 필터링
+        image_masks = df[(df['image_name'] == image_name) & (df['class'] == target_class)]
+        
+        # 마스크 초기화
+        class_mask = np.zeros(image_shape[:2], dtype=np.uint8)
+        
+        # 해당 클래스의 마스크만 처리
+        for _, row in image_masks.iterrows():
+            rle = row['rle']
+            # RLE 디코딩
+            decoded_mask = MaskGenerator.decode_rle_to_mask(rle, image_shape[0], image_shape[1])
+            class_mask[decoded_mask == 1] = 1
+        
+        return class_mask
 
 class PointCloudGenerator:
     @staticmethod
