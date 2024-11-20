@@ -277,7 +277,7 @@ def main():
     # AdamW optimizer 설정
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=5e-4,
+        lr=2e-4,
         weight_decay=0.05,
         betas=(0.9, 0.999)
     )
