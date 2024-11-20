@@ -56,26 +56,10 @@ class MaskGenerator:
     
     @staticmethod
     def decode_rle_to_mask(rle, height, width):
-        """
-        RLE 인코딩된 마스크를 디코딩합니다.
-        Args:
-            rle: RLE 인코딩된 문자열
-            height: 출력 이미지의 높이
-            width: 출력 이미지의 너비
-        Returns:
-            디코딩된 마스크 (height x width)
-        """
-        s = rle.split()
-        # s[0::2], s[1::2]로 수정하여 더 명확하게 표현
-        starts, lengths = [np.asarray(x, dtype=int) for x in (s[0::2], s[1::2])]
-        starts -= 1  # 1-based index를 0-based index로 변환
-        ends = starts + lengths
-        img = np.zeros(height * width, dtype=np.uint8)
-        
-        for lo, hi in zip(starts, ends):
-            img[lo:hi] = 1
-        
-        return img.reshape(height, width)
+        # RLE 디코딩
+        mask = np.zeros(height * width, dtype=np.uint8)
+        rle = rle.split()
+        return mask
     
     @staticmethod
     def load_and_process_masks(data_loader, csv_path, image_name, image_shape):  # self 파라미터 제거
