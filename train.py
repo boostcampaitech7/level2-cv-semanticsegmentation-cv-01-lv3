@@ -34,6 +34,12 @@ def parse_args():
     parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
     
+    # poly learning rate 관련 인자 추가
+    parser.add_argument('--power', type=float, default=0.9,
+                        help='Poly learning rate power')
+    
+    
+    
     # Wandb logging
     parser.add_argument('--wandb_project', type=str, default='FCN_baseline',
                         help='Wandb 프로젝트 이름')
@@ -46,6 +52,27 @@ def parse_args():
                       help='Enable early stopping (default: True)')
     parser.add_argument('--patience', type=int, default=5,
                       help='Early stopping patience (default: 5)')
+    
+        # Hook 관련 arguments 추가
+    parser.add_argument('--use_hook', default=True,
+                        help='Feature visualization hook 사용 여부')
+#    efficientnet-b7
+    parser.add_argument('--target_layers', nargs='+', 
+                        default= [
+                            'encoder.layer1',
+                            'encoder.layer2',
+                            'encoder.layer3',
+                            'encoder.layer4',
+                            'decoder.aspp.0.convs.0',
+                            'decoder.aspp.0.convs.1',
+                            'decoder.aspp.0.convs.2',
+                            'decoder.aspp.0.convs.3',
+                            'decoder.aspp.0.project',
+                            'decoder.block1',
+                            'decoder.block2',
+                            'segmentation_head.2'
+                        ],
+                        help='Feature를 시각화할 target layers')
     
     args = parser.parse_args()
     return args
