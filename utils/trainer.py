@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 # plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
 import plotly.graph_objects as go
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, wandb=None):
+def train(model, data_loader, val_loader, criterion, optimizer, scheduler,num_epochs, val_every, saved_dir, model_name, wandb=None):
     print('Start training..')
     
     best_dice = 0.
@@ -52,7 +52,8 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                     "train/step": epoch * len(data_loader) + step,
                     "train/epoch": epoch,
                 })
-            
+
+        scheduler.step()    
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
             dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
