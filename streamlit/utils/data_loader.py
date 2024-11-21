@@ -17,9 +17,6 @@ class DataLoader:
         image_files = []
         
         for root, dirs, files in os.walk(self.images_dir):
-            print(f"Current directory: {root}")  # 현재 검색 중인 디렉토리
-            print(f"Found directories: {dirs}")  # 발견된 하위 디렉토리들
-            print(f"Found files: {files}")  # 발견된 파일들
             
             for f in files:
                 if f.endswith('.png'):
