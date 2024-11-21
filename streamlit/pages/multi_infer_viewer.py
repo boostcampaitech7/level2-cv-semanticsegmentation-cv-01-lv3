@@ -49,35 +49,50 @@ def get_distinct_colors(n):
     ]
     return distinct_colors[:n]
 
-def overlay_multiple_masks(image, masks, colors=None, alpha=0.5, beta=0.1):
-    """여러 마스크를 하나의 이미지에 오버레이 (각각 다른 색상으로)"""
+def overlay_multiple_masks_from_rle(image, data_loaders, csv_paths, image_name, image_shape, alpha=0.9, beta=0.9, csv_colors=None, selected_class=None):
+    """
+    여러 CSV의 RLE 인코딩된 마스크들을 하나의 이미지에 오버레이하는 함수
+    selected_class: 특정 클래스만 표시하고 싶을 때 사용
+    """
     result = image.copy()
-    if colors is None:
-        colors = [get_distinct_colors(len(masks))[idx] 
-                 for idx in range(len(masks))]
-    
-    # 모든 마스크의 색상을 합칠 배열 초기화
     colored_overlay = np.zeros_like(image, dtype=np.float32)
     
-    for mask, color in zip(masks, colors):
-        # 외곽선 추출
-        contours = cv2.findContours(mask.astype(np.uint8), 
-                                  cv2.RETR_EXTERNAL, 
-                                  cv2.CHAIN_APPROX_SIMPLE)[0]
+    # 각 CSV 파일별로 처리
+    for csv_path, csv_color in zip(csv_paths, csv_colors):
+        df = data_loaders.load_inference_csv(csv_path)
+        image_masks = df[df['image_name'] == image_name]
         
-        # 외곽선은 진하게
-        cv2.drawContours(result, contours, -1, color, 2)
+        # 특정 클래스만 필터링
+        if selected_class is not None:
+            image_masks = image_masks[image_masks['class'] == selected_class]
         
-        # 내부 색상을 colored_overlay에 추가
-        temp_mask = np.zeros_like(image, dtype=np.float32)
-        cv2.fillPoly(temp_mask, contours, color)
-        colored_overlay += temp_mask / 255.0  # 색상값을 0~1 범위로 정규화
+        # 각 클래스별로 마스크 생성
+        for _, row in image_masks.iterrows():
+            rle = row['rle']
+            
+            # RLE 디코딩하여 마스크 생성
+            mask = MaskGenerator.decode_rle_to_mask(rle, image_shape[0], image_shape[1])
+            
+            # 마스크에 대한 윤곽선 처리
+            contours = cv2.findContours(mask.astype(np.uint8), 
+                                      cv2.RETR_LIST,
+                                      cv2.CHAIN_APPROX_SIMPLE)[0]
+            
+            # 외곽선 그리기
+            cv2.drawContours(result, contours, -1, csv_color, 2)
+            
+            # 내부 색상 처리
+            temp_mask = np.zeros_like(image, dtype=np.float32)
+            cv2.fillPoly(temp_mask, contours, csv_color)
+            
+            # 마스크 누적 (투명도 조절을 위해 가중치 적용)
+            colored_overlay += temp_mask * (beta / len(csv_paths))
     
     # 전체 오버레이를 0~255 범위로 클리핑
     colored_overlay = np.clip(colored_overlay, 0, 255).astype(np.uint8)
     
-    # alpha를 사용하여 원본 이미지와 마스크를 블렌딩
-    result = cv2.addWeighted(result, alpha, colored_overlay, beta, 0)
+    # 최종 블렌딩
+    result = cv2.addWeighted(result, alpha, colored_overlay, 1.0, 0)
     
     return result
 
@@ -98,7 +113,6 @@ def main():
     # 시각화 모드 선택 부분 수정
     view_mode = st.radio("시각화 모드 선택", 
                         ["마스크 중첩 모드", "나란히 비교 모드", "클래스별 비교 모드"])
-    
     
     if selected_pair and selected_csvs:
         mask_generator = MaskGenerator()
@@ -135,18 +149,26 @@ def main():
                         os.path.join(prediction_dir, csv_file),
                         image_pairs[selected_pair]['L'].split('/')[-1],
                         image_l.shape,
-                        selected_class  # 클래스 이름 직접 전달
+                        selected_class  # 클래스 이름 직접 전달,
                     )
                     masks_l.append(mask)
                 except Exception as e:
                     st.error(f"마스크 처리 중 오류 발생: {str(e)}")
             
             if masks_l:
-                result_l = overlay_multiple_masks(image_l, masks_l, 
-                                            list(csv_colors.values()), 
-                                            beta=0.4)
+                result_l = overlay_multiple_masks_from_rle(
+                    image=image_l,
+                    data_loaders=data_loader,
+                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
+                    image_name=image_pairs[selected_pair]['L'].split('/')[-1],
+                    image_shape=image_l.shape,
+                    alpha=0.7,
+                    beta=0.3,
+                    csv_colors=[csv_colors[csv] for csv in selected_csvs],
+                    selected_class=selected_class  # 선택된 클래스 전달
+                )
                 st.image(result_l, use_container_width=True)
-                
+            
                 # 범례 표시
                 st.write("📋 범례")
                 for csv, color in csv_colors.items():
@@ -176,9 +198,17 @@ def main():
                     st.error(f"마스크 처리 중 오류 발생: {str(e)}")
             
             if masks_r:
-                result_r = overlay_multiple_masks(image_r, masks_r, 
-                                            list(csv_colors.values()), 
-                                            beta=0.4)
+                result_r = overlay_multiple_masks_from_rle(
+                    image=image_r,
+                    data_loaders=data_loader,
+                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
+                    image_name=image_pairs[selected_pair]['R'].split('/')[-1],
+                    image_shape=image_r.shape,
+                    alpha=0.7,
+                    beta=0.3,
+                    csv_colors=[csv_colors[csv] for csv in selected_csvs],
+                    selected_class=selected_class  # 선택된 클래스 전달
+                )
                 st.image(result_r, use_container_width=True)
                 
                 # 범례 표시
@@ -193,8 +223,8 @@ def main():
                     )
         
        
+    # 마스크 중첩 모드 부분
     elif view_mode == "마스크 중첩 모드":
-        # 전체 화면 너비 사용
         st.subheader("마스크 중첩 비교")
         
         # Left 이미지
@@ -206,37 +236,32 @@ def main():
         image_r = cv2.imread(os.path.join(data_loader.images_dir, 
                                         image_pairs[selected_pair]['R']))
         image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
-    
-            # 뚜렷한 색상 생성
+
+        # 뚜렷한 색상 생성
         distinct_colors = get_distinct_colors(len(selected_csvs))
         csv_colors = {csv: color for csv, color in zip(selected_csvs, distinct_colors)}
         
         # Left 이미지 처리
-        col1, col2 = st.columns([3, 1])  # 3:1 비율로 컬럼 분할
+        col1, col2 = st.columns([3, 1])
         
         with col1:
             st.write("Left Image")
-            masks_l = []
-            for csv_file in selected_csvs:
-                try:
-                    mask = mask_generator.load_and_process_masks(
-                        data_loader,
-                        os.path.join(prediction_dir, csv_file),
-                        image_pairs[selected_pair]['L'].split('/')[-1],
-                        image_l.shape
-                    )
-                    masks_l.append(mask)
-                except Exception as e:
-                    st.error(f"마스크 처리 중 오류 발생: {str(e)}")
-            
-            if masks_l:
-                result_l = overlay_multiple_masks(image_l, masks_l, 
-                                            list(csv_colors.values()), 
-                                            beta=0.4)  # 투명도 조정
+            try:
+                result_l = overlay_multiple_masks_from_rle(
+                    image=image_l,
+                    data_loaders=data_loader,
+                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
+                    image_name=image_pairs[selected_pair]['L'].split('/')[-1],
+                    image_shape=image_l.shape,
+                    alpha=0.7,
+                    beta=0.3,
+                    csv_colors=[csv_colors[csv] for csv in selected_csvs]
+                )
                 st.image(result_l, use_container_width=True)
-        
+            except Exception as e:
+                st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+
         with col2:
-            # 범례를 더 눈에 띄게 표시
             st.write("📋 범례")
             for csv, color in csv_colors.items():
                 st.markdown(
@@ -246,34 +271,27 @@ def main():
                     f'<span style="font-size: 16px;">{csv}</span></div>',
                     unsafe_allow_html=True
                 )
-        
-        # Left 이미지 처리
-        col1, col2 = st.columns([3, 1])  # 3:1 비율로 컬럼 분할
+
+        # Right 이미지 처리
+        col1, col2 = st.columns([3, 1])
         
         with col1:
             st.write("Right Image")
-            # Right 이미지도 동일한 방식으로 처리
-            masks_r = []
-            for csv_file in selected_csvs:
-                try:
-                    mask = mask_generator.load_and_process_masks(
-                        data_loader,
-                        os.path.join(prediction_dir, csv_file),
-                        image_pairs[selected_pair]['R'].split('/')[-1],
-                        image_r.shape
-                    )
-                    masks_r.append(mask)
-                except Exception as e:
-                    st.error(f"마스크 처리 중 오류 발생: {str(e)}")
-            
-            if masks_r:
-                result_r = overlay_multiple_masks(image_r, masks_r, 
-                                            list(csv_colors.values()), 
-                                            beta=0.4)
+            try:
+                result_r = overlay_multiple_masks_from_rle(
+                    image=image_r,
+                    data_loaders=data_loader,
+                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
+                    image_name=image_pairs[selected_pair]['R'].split('/')[-1],
+                    image_shape=image_r.shape,
+                    alpha=0.7,
+                    beta=0.3,
+                    csv_colors=[csv_colors[csv] for csv in selected_csvs]
+                )
                 st.image(result_r, use_container_width=True)
-                
+            except Exception as e:
+                st.error(f"마스크 처리 중 오류 발생: {str(e)}")
         with col2:
-            # 범례를 더 눈에 띄게 표시
             st.write("📋 범례")
             for csv, color in csv_colors.items():
                 st.markdown(
@@ -289,7 +307,6 @@ def main():
         cols = st.columns(num_cols)
             
         # Left 이미지 세트
-        st.subheader("Left Image Set")
         with cols[0]:
             st.write("Original")
             image_l = cv2.imread(os.path.join(data_loader.images_dir, 
@@ -297,29 +314,26 @@ def main():
             image_l = cv2.cvtColor(image_l, cv2.COLOR_BGR2RGB)
             st.image(image_l, use_container_width=True)
         
-        # 각 CSV 파일별 마스크
+        # 각 CSV 파일별 마스크 (Left)
         for idx, csv_file in enumerate(selected_csvs, 1):
             with cols[idx]:
                 st.write(f"Mask: {csv_file}")
                 try:
-                    mask_l = mask_generator.load_and_process_masks(
-                        data_loader,
-                        os.path.join(prediction_dir, csv_file),
-                        image_pairs[selected_pair]['L'].split('/')[-1],
-                        image_l.shape
-                    )
-                    # 원본 이미지에 마스크 오버레이
-                    result = overlay_multiple_masks(
-                        image_l, [mask_l], 
-                        [csv_colors[csv_file]], 
-                        beta=0.5
+                    result = overlay_multiple_masks_from_rle(
+                        image=image_l,
+                        data_loaders=data_loader,
+                        csv_paths=[os.path.join(prediction_dir, csv_file)],
+                        image_name=image_pairs[selected_pair]['L'].split('/')[-1],
+                        image_shape=image_l.shape,
+                        alpha=0.7,
+                        beta=0.3,
+                        csv_colors=[csv_colors[csv_file]]
                     )
                     st.image(result, use_container_width=True)
                 except Exception as e:
                     st.error(f"마스크 처리 중 오류 발생: {str(e)}")
         
         # Right 이미지 세트 (Left와 동일한 로직)
-        st.subheader("Right Image Set")
         with cols[0]:
             st.write("Original")
             image_r = cv2.imread(os.path.join(data_loader.images_dir, 
@@ -327,20 +341,20 @@ def main():
             image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
             st.image(image_r, use_container_width=True)
         
+        # 각 CSV 파일별 마스크 (Right)
         for idx, csv_file in enumerate(selected_csvs, 1):
             with cols[idx]:
                 st.write(f"Mask: {csv_file}")
                 try:
-                    mask_r = mask_generator.load_and_process_masks(
-                        data_loader,
-                        os.path.join(prediction_dir, csv_file),
-                        image_pairs[selected_pair]['R'].split('/')[-1],
-                        image_r.shape
-                    )
-                    result = overlay_multiple_masks(
-                        image_r, [mask_r], 
-                        [csv_colors[csv_file]], 
-                        beta=0.5
+                    result = overlay_multiple_masks_from_rle(
+                        image=image_r,
+                        data_loaders=data_loader,
+                        csv_paths=[os.path.join(prediction_dir, csv_file)],
+                        image_name=image_pairs[selected_pair]['R'].split('/')[-1],
+                        image_shape=image_r.shape,
+                        alpha=0.7,
+                        beta=0.3,
+                        csv_colors=[csv_colors[csv_file]]
                     )
                     st.image(result, use_container_width=True)
                 except Exception as e:
