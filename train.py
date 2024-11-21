@@ -21,34 +21,27 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='hrnet_w64',
+    parser.add_argument('--model_name', type=str, default='fcn_resnet50',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=2,
+    parser.add_argument('--batch_size', type=int, default=8,
                         help='배치 크기')
-    parser.add_argument('--lr', type=float, default=1e-3,
+    parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=200,
+    parser.add_argument('--num_epochs', type=int, default=30,
                         help='총 에폭 수')
     parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='test-hanseonglee',
+    parser.add_argument('--wandb_project', type=str, default='FCN_baseline',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='Mismatch_test', help='WandB Run 이름')
-    
-    # Early stopping 관련 인자 수정
-    parser.add_argument('--early_stopping', type=bool, default=True,
-                      help='Enable early stopping (default: True)')
-    parser.add_argument('--patience', type=int, default=5,
-                      help='Early stopping patience (default: 5)')
-    
-    args = parser.parse_args()
-    return args
+    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
+
+    return parser.parse_args()
 
 def main():
     args = parse_args()
@@ -101,7 +94,7 @@ def main():
     #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
 
     # 모델 smp로 설정 (모델 변경 시 수정 필요)
-    model = smp.UnetPlusPlus(
+    model = smp.UPerNet(
         encoder_name='efficientnet-b0', 
         encoder_weights='imagenet', 
         in_channels=3, 
