@@ -66,7 +66,8 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                     "train/epoch": epoch,
                     "train/lr":current_lr
                 })
-            
+
+        scheduler.step()    
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
             val_loss, dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)

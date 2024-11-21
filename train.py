@@ -6,12 +6,14 @@ import torch.nn as nn
 import torch.optim as optim
 import segmentation_models_pytorch as smp
 from torch.utils.data import DataLoader
-from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+from utils.loss import CombinedBCEDiceLoss
 import time
+import torch
 
-# Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
+# Wandb import
 import wandb
 
 def parse_args():
@@ -70,10 +72,10 @@ def main():
         os.makedirs(args.saved_dir)
     print(f"Training Results will be saved in {args.saved_dir}!")
     
-    # 시드 고정
+    # Set seed
     set_seed()
     
-    # 데이터셋 및 데이터로더 설정
+    # Dataset and DataLoader setup
     train_transform = A.Compose([
         A.Resize(1024,1024)
     ])
@@ -99,20 +101,16 @@ def main():
         pin_memory=True
     )
     
-    # Torchvision 사용 시 주석 처리 해제
-    #model = models.segmentation.fcn_resnet50(pretrained=True)
-    #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
-
-    # 모델 smp로 설정 (모델 변경 시 수정 필요)
+    # Model setup
     model = smp.UPerNet(
         encoder_name='tu-hrnet_w64', 
         encoder_weights='imagenet', 
         in_channels=3, 
         classes=len(CLASSES)
-        )
-    
-    # Loss function과 optimizer 설정
-    criterion = nn.BCEWithLogitsLoss()
+    ).cuda()
+
+    # Loss function and optimizer setup
+    criterion = CombinedBCEDiceLoss(bce_weight=0.5)
     optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
     
     # 학습 수행
