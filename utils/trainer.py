@@ -16,10 +16,12 @@ import matplotlib.pyplot as plt
 # plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
 import plotly.graph_objects as go
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None):
+def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None, accumulation_step=1):
     print('Start training..')
     if early_stopping:
         print(f'Early stopping enabled with patience {patience}')
+    if accumulation_step!=1:
+        print(f"Accumulation step applied to {accumulation_step}")
     
     best_dice = 0.
     best_loss = float('inf')  # 최소 loss 초기화
@@ -44,20 +46,25 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 outputs = model(images)
             loss = criterion(outputs, masks)
             
-            optimizer.zero_grad()
+            # optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
-    
+            # optimizer.step()
+            # Gradient Accumulation 기준으로 업데이트
+            if (step + 1) % accumulation_step == 0 or (step + 1) == len(data_loader):
+                optimizer.step()  # 누적된 그래디언트로 가중치 업데이트
+                optimizer.zero_grad()  # 그래디언트 초기화
             progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
                 
             
             
             # Wandb에 학습 지표 기록
             if wandb is not None:
+                current_lr = optimizer.param_groups[0]['lr']
                 wandb.log({
                     "train/loss": loss.item(),
-                    "train/step": epoch * len(data_loader) + step,
+                    "train/step": epoch * len(data_loader) + step // accumulation_step,
                     "train/epoch": epoch,
+                    "train/lr":current_lr
                 })
             
         # 검증 주기마다 검증 수행

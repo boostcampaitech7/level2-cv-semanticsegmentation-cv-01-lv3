@@ -21,25 +21,27 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='fcn_resnet50',
+    parser.add_argument('--model_name', type=str, default='hrnet_w64',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=200,
+    parser.add_argument('--num_epochs', type=int, default=150,
                         help='총 에폭 수')
-    parser.add_argument('--val_every', type=int, default=1,
+    parser.add_argument('--val_every', type=int, default=5,
                         help='검증 주기')
-    
+    parser.add_argument('--accumulation_steps', type=int, default=4, help='Gradient Accumulation Steps를 설정')
+    # 실험 관리 용도
+    parser.add_argument('--augmentation', type=str, default='', help='Checkpoint를 저장하는 디렉토리 이름 저장 용도')
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='FCN_baseline',
+    parser.add_argument('--wandb_project', type=str, default='UPerNet_Exp_Augmentation',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='Initial Test', help='WandB Run 이름')
     
     # Early stopping 관련 인자 수정
     parser.add_argument('--early_stopping', type=bool, default=True,
@@ -54,7 +56,8 @@ def main():
     args = parse_args()
     
     current_time = time.strftime("%m-%d_%H-%M-%S")
-    args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.model_name}")
+    # args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.model_name}")
+    args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.augmentation}")
     # Wandb initalize
     wandb.init(
         project=args.wandb_project,
@@ -72,7 +75,7 @@ def main():
     
     # 데이터셋 및 데이터로더 설정
     train_transform = A.Compose([
-        A.Resize(512,512)
+        A.Resize(1024,1024)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
@@ -102,7 +105,7 @@ def main():
 
     # 모델 smp로 설정 (모델 변경 시 수정 필요)
     model = smp.UPerNet(
-        encoder_name='efficientnet-b0', 
+        encoder_name='tu-hrnet_w64', 
         encoder_weights='imagenet', 
         in_channels=3, 
         classes=len(CLASSES)
@@ -114,7 +117,7 @@ def main():
     
     # 학습 수행
     train(model, train_loader, valid_loader, criterion, optimizer, 
-          args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb)
+          args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb, accumulation_step=args.accumulation_steps)
 
 if __name__ == '__main__':
     main()
