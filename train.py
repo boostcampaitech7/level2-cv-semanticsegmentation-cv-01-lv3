@@ -21,25 +21,25 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='fcn_resnet50',
+    parser.add_argument('--model_name', type=str, default='efficientnet-b7',
                         help='모델 이름')
-    parser.add_argument('--saved_dir', type=str, default='./checkpoints',
+    parser.add_argument('--saved_dir', type=str, default='./checkpoints/loss',
                         help='모델 저장 경로')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='배치 크기')
-    parser.add_argument('--lr', type=float, default=1e-4,
+    parser.add_argument('--lr', type=float, default=3e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=200,
                         help='총 에폭 수')
-    parser.add_argument('--val_every', type=int, default=1,
+    parser.add_argument('--val_every', type=int, default=5,
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='FCN_baseline',
+    parser.add_argument('--wandb_project', type=str, default='Unetpp loss',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='dice_loss', help='WandB Run 이름')
     
     # Early stopping 관련 인자 수정
     parser.add_argument('--early_stopping', type=bool, default=True,
@@ -101,19 +101,20 @@ def main():
     #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
 
     # 모델 smp로 설정 (모델 변경 시 수정 필요)
-    model = smp.UPerNet(
-        encoder_name='efficientnet-b0', 
+    model = smp.UnetPlusPlus(
+        encoder_name='efficientnet-b7', 
         encoder_weights='imagenet', 
         in_channels=3, 
         classes=len(CLASSES)
         )
     
     # Loss function과 optimizer 설정
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
+    criterion = smp.losses.DiceLoss('multilabel')
+    optimizer = optim.Adam(params=model.parameters(), lr=args.lr,weight_decay=1e-6)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs, eta_min=0)
     
     # 학습 수행
-    train(model, train_loader, valid_loader, criterion, optimizer, 
+    train(model, train_loader, valid_loader, criterion, optimizer, scheduler,
           args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb)
 
 if __name__ == '__main__':
