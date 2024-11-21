@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 # plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
 import plotly.graph_objects as go
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None, accumulation_step=1):
+def train(model, data_loader, val_loader, criterion, optimizer, scheduler, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None, accumulation_step=1, ):
     print('Start training..')
     if early_stopping:
         print(f'Early stopping enabled with patience {patience}')

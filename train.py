@@ -31,7 +31,7 @@ def parse_args():
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=150,
+    parser.add_argument('--num_epochs', type=int, default=200,
                         help='총 에폭 수')
     parser.add_argument('--val_every', type=int, default=5,
                         help='검증 주기')
@@ -112,9 +112,9 @@ def main():
     # Loss function and optimizer setup
     criterion = CombinedBCEDiceLoss(bce_weight=0.5)
     optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
-    
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr= 0.001, pct_start=0.1, steps_per_epoch=len(train_loader)//args.batch_size, epochs=args.num_epochs, anneal_strategy='cos')
     # 학습 수행
-    train(model, train_loader, valid_loader, criterion, optimizer, 
+    train(model, train_loader, valid_loader, criterion, optimizer, scheduler,
           args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb, accumulation_step=args.accumulation_steps)
 
 if __name__ == '__main__':
