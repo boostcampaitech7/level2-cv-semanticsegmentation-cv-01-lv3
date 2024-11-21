@@ -175,8 +175,8 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                     text=norm_confusion_matrix.cpu().numpy(),
                     texttemplate="%{text:.4f}",
                     textfont={"size": 10},
-                    colorscale="RdBu",
-                    colorbar=dict(title="Percentage (%)"),
+                    colorscale="OrRd",
+                    colorbar=dict(title="Percentage"),
                 ))
                 conf_fig.update_layout(
                     title="Confusion Matrix",
@@ -270,6 +270,7 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
                 "confusion_matrix": wandb.Image(plt),
                 "epoch": epoch
             })
+            print(f"Saved {epoch} - Confusion matrix")
     except Exception as e:
         print(f"Wandb logging error: {str(e)}")
     finally:
