@@ -265,16 +265,16 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
                 axes[0].set_title('Original Image')
                 axes[0].axis('off')
                 
-                # 예측 결과
-                pred_vis = sample_pred.sum(0)
-                axes[1].imshow(pred_vis, cmap='gray')
-                axes[1].set_title('Prediction')
-                axes[1].axis('off')
-                
                 # Ground Truth
                 gt_vis = sample_mask.sum(0)
-                axes[2].imshow(gt_vis, cmap='gray')
-                axes[2].set_title('Ground Truth')
+                axes[1].imshow(gt_vis, cmap='gray')
+                axes[1].set_title('Ground Truth')
+                axes[1].axis('off')
+
+                # 예측 결과
+                pred_vis = sample_pred.sum(0)
+                axes[2].imshow(pred_vis, cmap='gray')
+                axes[2].set_title('Prediction')
                 axes[2].axis('off')
                 
                 # 오분류 맵
@@ -283,7 +283,7 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
                 axes[3].axis('off')
                 
                 plt.tight_layout()
-                wandb.log({f"Validation/worst_misclassification_ep{epoch}_img{idx}": wandb.Image(fig)})
+                wandb.log({f"Mismatch Visualization/miprediction graph epoch{epoch}_img{idx}": wandb.Image(fig)})
                 plt.close()
     
     # 오분류 통계 출력 및 로깅
@@ -295,14 +295,11 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
         fp_rate = fp / total_pixels * 100
         fn_rate = fn / total_pixels * 100
         
-        print(f"\n{cls_name}:")
-        print(f"False Positives: {fp} pixels ({fp_rate:.2f}%)")
-        print(f"False Negatives: {fn} pixels ({fn_rate:.2f}%)")
         
         if wandb:
             misclass_stats.update({
-                f"Validation/{cls_name}_FP_rate": fp_rate,
-                f"Validation/{cls_name}_FN_rate": fn_rate
+                f"Mismatch Visualization/{cls_name}_FP_rate": fp_rate,
+                f"Mismatch Visualization/{cls_name}_FN_rate": fn_rate
             })
     
     if wandb:
