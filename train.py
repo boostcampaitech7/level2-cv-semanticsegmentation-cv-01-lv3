@@ -6,12 +6,14 @@ import torch.nn as nn
 import torch.optim as optim
 import segmentation_models_pytorch as smp
 from torch.utils.data import DataLoader
-from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+from utils.loss import CombinedBCEDiceLoss
 import time
+import torch
 
-# Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
+# Wandb import
 import wandb
 
 def parse_args():
@@ -21,11 +23,11 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='fcn_resnet50',
+    parser.add_argument('--model_name', type=str, default='FocalLoss',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
@@ -35,11 +37,11 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='UPerNet_Kenlee',
+    parser.add_argument('--wandb_project', type=str, default='UPerNet_Exp',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='', help='encoder_name')
+    parser.add_argument('--wandb_run_name', type=str, default='CombinedLoss_1024', help='encoder_name')
 
     return parser.parse_args()
 
@@ -48,7 +50,7 @@ def main():
     
     current_time = time.strftime("%m-%d_%H-%M-%S")
     args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.model_name}")
-    # Wandb initalize
+    # Wandb initialize
     wandb.init(
         project=args.wandb_project,
         entity=args.wandb_entity,
@@ -60,12 +62,12 @@ def main():
         os.makedirs(args.saved_dir)
     print(f"Training Results will be saved in {args.saved_dir}!")
     
-    # 시드 고정
+    # Set seed
     set_seed()
     
-    # 데이터셋 및 데이터로더 설정
+    # Dataset and DataLoader setup
     train_transform = A.Compose([
-        A.Resize(512,512)
+        A.Resize(1024, 1024)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
@@ -89,25 +91,64 @@ def main():
         pin_memory=True
     )
     
-    # Torchvision 사용 시 주석 처리 해제
-    #model = models.segmentation.fcn_resnet50(pretrained=True)
-    #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
-
-    # 모델 smp로 설정 (모델 변경 시 수정 필요)
+    # Model setup
     model = smp.UPerNet(
-        encoder_name='efficientnet-b0', 
-        encoder_weights='imagenet', 
+        encoder_name='tu-hrnet_w64', 
         in_channels=3, 
         classes=len(CLASSES)
-        )
-    
-    # Loss function과 optimizer 설정
-    criterion = nn.BCEWithLogitsLoss()
+    ).cuda()
+
+    # Loss function and optimizer setup
+    criterion = CombinedBCEDiceLoss(bce_weight=0.5)
     optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=1e-6)
     
-    # 학습 수행
-    train(model, train_loader, valid_loader, criterion, optimizer, 
-          args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb)
+    scheduler = CosineAnnealingWarmRestarts(
+        optimizer,
+        T_0=10,           # First restart epoch count
+        T_mult=2,        # Increase period by T_mult for each restart
+        eta_min=1e-6     # Minimum learning rate
+    )
+
+    # Set the number of accumulation steps
+    accumulation_steps = 4  # Update every 4 steps
+
+    # Training loop
+    model.train()
+    for epoch in range(args.num_epochs):
+        running_loss = 0.0
+        optimizer.zero_grad()  # Reset gradients at the start of each epoch
+
+        for step, (images, targets) in enumerate(train_loader):
+            images = images.cuda()
+            targets = targets.cuda()
+
+            # Forward pass
+            outputs = model(images)
+            loss = criterion(outputs, targets)  # Calculate loss
+
+            # Normalize the loss by the number of accumulation steps
+            loss = loss / accumulation_steps
+
+            # Backward pass
+            loss.backward()  # Accumulate gradients
+
+            # Update weights every 'accumulation_steps'
+            if (step + 1) % accumulation_steps == 0:
+                optimizer.step()  # Update weights
+                optimizer.zero_grad()  # Reset gradients
+
+            running_loss += loss.item()
+
+        # Step the scheduler at the end of each epoch
+        scheduler.step()
+
+        # Print or log the loss for the epoch
+        print(f"Epoch [{epoch + 1}/{args.num_epochs}], Loss: {running_loss / len(train_loader):.4f}")
+
+        # Optionally, you can add validation logic here
+
+    # Save the model after training
+    torch.save(model.state_dict(), os.path.join(args.saved_dir, f"{args.model_name}.pth"))
 
 if __name__ == '__main__':
     main()
