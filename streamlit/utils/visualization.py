@@ -16,3 +16,16 @@ class Visualizer:
             ax.imshow(mask, cmap='bone')
             ax.axis('off')
             st.pyplot(fig)
+    
+    @staticmethod
+    def display_cloud_point(mask):
+        col1 = st.columns(1)
+
+        with col1:
+            st.subheader("포인트 클라우드")
+            fig, ax = plt.subplots(figsize=(20, 20))
+            ax.imshow(mask, cmap='bone')
+            ax.axis('off')
+            st.pyplot(fig)
+
+        
