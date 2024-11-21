@@ -6,15 +6,15 @@ import torch
 from tqdm import tqdm
 import torch.nn.functional as F
 from utils.dataset import CLASSES
-from utils.method import dice_coef
-
-
+#Calculate Multi-label confusion metrix (2024.11.21)
+from utils.method import dice_coef , calculate_confusion_matrix 
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
 # matplotlib import(#3 commit, deamin, 2024.11.12)
 import matplotlib.pyplot as plt
 # plotly import(Feature:#6 Wandb에 전체 class 별 dice 시각화 개선, deamin, 2024.11.13)
 import plotly.graph_objects as go
+import seaborn as sns
 
 def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None):
     print('Start training..')
@@ -49,9 +49,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             optimizer.step()
     
             progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
-                
-            
-            
+                            
             # Wandb에 학습 지표 기록
             if wandb is not None:
                 wandb.log({
@@ -62,7 +60,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
-            val_loss, dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
+            val_loss, dice, dices_per_class , norm_confusion_matrix = validation(epoch + 1, model, val_loader, criterion)
             
             # Early stopping 체크 (loss 기준)
             if early_stopping:
@@ -113,11 +111,11 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 class_dice_dict[f"valid/dice_{class_name}"] = class_dice.item()
             wandb.log(class_dice_dict)
 
+           
             # 데이터가 충분히 쌓였을 때만 그래프 그리기
             if len(epoch_history) > 0:
 
                 fig = go.Figure()
-                
                 # 색상 팔레트 생성
                 colors = plt.cm.rainbow(np.linspace(0, 1, len(CLASSES)))
                 
@@ -164,26 +162,50 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
                 fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
                 
+                
                 # wandb에 로깅
                 wandb.log({"valid/class_wise_dice_scores": fig})
 
+                ## logging confusion_matrix in wandb
+                conf_fig = go.Figure(data=go.Heatmap(
+                    z=norm_confusion_matrix.cpu().numpy(),
+                    x=CLASSES,
+                    y=CLASSES,
+                    hoverongaps=False,
+                    text=norm_confusion_matrix.cpu().numpy(),
+                    texttemplate="%{text:.4f}",
+                    textfont={"size": 10},
+                    colorscale="OrRd",
+                    colorbar=dict(title="Percentage"),
+                ))
+                conf_fig.update_layout(
+                    title="Confusion Matrix",
+                    xaxis_title="Predicted Class",
+                    yaxis_title="Actual Class",
+                    width=800,
+                    height=800,
+                )
+
+                wandb.log({
+                    "valid/confusion_matrix": conf_fig
+                })
             
-                        
 def validation(epoch, model, data_loader, criterion, thr=0.5):
     print(f'Start validation #{epoch:2d}')
     model.eval()
-
+    
     dices = []
     total_loss = 0
     cnt = 0
-    
     with torch.no_grad():
         progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Validation [{epoch}]")
-        n_class = len(CLASSES)
+        n_classes = len(CLASSES)
+        total_conf_matrix = torch.zeros((n_classes, n_classes), device='cuda')
 
         for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()         
             model = model.cuda()
+            
             try:
                 outputs = model(images)['out']
             except:
@@ -192,22 +214,26 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
             output_h, output_w = outputs.size(-2), outputs.size(-1)
             mask_h, mask_w = masks.size(-2), masks.size(-1)
             
-            # gt와 prediction의 크기가 다른 경우 prediction을 gt에 맞춰 interpolation 합니다.
             if output_h != mask_h or output_w != mask_w:
                 outputs = F.interpolate(outputs, size=(mask_h, mask_w), mode="bilinear")
-            
+    
             loss = criterion(outputs, masks)
-            total_loss += loss.item()
+            total_loss += loss
             cnt += 1
-            
+
             outputs = torch.sigmoid(outputs)
-            outputs = (outputs > thr).detach().cpu()
-            masks = masks.detach().cpu()
+            outputs = (outputs > thr).float()
             
+            ##confusion matrix 계산 (2024.11.21)
+            total_conf_matrix += calculate_confusion_matrix(masks, outputs, n_classes)
+            
+            # dice coefficient 계산 (outputs와 masks가 같은 디바이스에 있어야 함)
             dice = dice_coef(outputs, masks)
             dices.append(dice)
-            progress_bar.set_postfix(loss=round(loss.item(), 4), avg_loss=round(total_loss / cnt, 4))
-                
+    
+
+    avg_conf_matrix = total_conf_matrix / cnt # 전체 배치에 대한 평균 confusion matrix 
+    
     avg_loss = total_loss / cnt
     dices = torch.cat(dices, 0)
     dices_per_class = torch.mean(dices, 0)
@@ -217,10 +243,40 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
     ]
     dice_str = "\n".join(dice_str)
     print(dice_str)
-    
     avg_dice = torch.mean(dices_per_class).item()
     
-    return avg_loss, avg_dice, dices_per_class  # loss를 첫 번째 반환값으로 추가
+    ##(11.21) Confusion Metrix heatmap 추가
+    plt.figure(figsize=(20, 16))
+    # GPU 텐서를 CPU로 이동 후 numpy로 변환
+    conf_matrix_np = avg_conf_matrix.cpu().numpy()
+    
+    sns.heatmap(conf_matrix_np, 
+                annot=True,
+                fmt='.2f',
+                cmap='YlOrRd',
+                xticklabels=CLASSES,
+                yticklabels=CLASSES)
+    
+    plt.title('Normalized Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    
+    try:
+        # wandb에 confusion matrix 이미지 로깅
+        if wandb.run is not None:
+            wandb.log({
+                "confusion_matrix": wandb.Image(plt),
+                "epoch": epoch
+            })
+            print(f"Saved {epoch} - Confusion matrix")
+    except Exception as e:
+        print(f"Wandb logging error: {str(e)}")
+    finally:
+        plt.close()  # 메모리 해제
+    
+    return avg_loss, avg_dice, dices_per_class, avg_conf_matrix
 
 def save_model(model, model_name, saved_dir):
     output_path = os.path.join(saved_dir, f"{model_name}.pt")
@@ -240,3 +296,4 @@ def set_seed(seed=1):
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
     random.seed(seed)
+
