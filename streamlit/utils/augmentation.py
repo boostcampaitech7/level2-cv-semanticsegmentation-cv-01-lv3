@@ -10,6 +10,7 @@ class Augmentations:
             "노이즈 추가": self.get_noise_transforms(),
             "기하학적 변환": self.get_geometric_transforms(),
             "사용자 정의 변환": self.get_custom_transforms(),
+            "히스토그램 평활화": self.get_histogram_transforms(),  # 새로운 변환 추가
         }
     
     def get_basic_transforms(self):
@@ -46,5 +47,11 @@ class Augmentations:
         
         transformed = self.transforms[transform_name](image=image)
         return transformed["image"]
+    
+    def get_histogram_transforms(self):
+        return A.Compose([
+            A.CLAHE(clip_limit=3.0, tile_grid_size=(3, 3), p=1.0),  # Contrast Limited Adaptive Histogram Equalization
+            #A.Equalize(p=1.0),  # 일반적인 히스토그램 평활화
+        ])
     
     
