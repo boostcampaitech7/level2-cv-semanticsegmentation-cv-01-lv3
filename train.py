@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument('--min_lr', type=int, default=0)
     parser.add_argument('--T_max', type=int, default=200)
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='UPerNet_Exp_TestTemp',
+    parser.add_argument('--wandb_project', type=str, default='UPerNet_Exp_Augmentation',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
