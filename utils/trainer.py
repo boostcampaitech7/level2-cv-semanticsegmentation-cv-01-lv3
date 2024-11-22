@@ -44,7 +44,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, scheduler, num_e
                 outputs = model(images)['out']
             except:
                 outputs = model(images)
-            loss = criterion(outputs, masks)
+            loss = criterion(outputs, masks) / accumulation_step
             
             # optimizer.zero_grad()
             loss.backward()
@@ -67,7 +67,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, scheduler, num_e
                     "train/lr":current_lr
                 })
 
-        scheduler.step()    
+            scheduler.step()    
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
             val_loss, dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
@@ -100,7 +100,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, scheduler, num_e
                 best_dice = dice
                 best_epoch = epoch + 1
                 model_path = save_model(model, f"{model_name}_epoch_{epoch + 1}_dice_{dice:.4f}", saved_dir)
-                wandb.save(model_path)
+                # wandb.save(model_path)
             
             # Wandb logging
             wandb.log({
