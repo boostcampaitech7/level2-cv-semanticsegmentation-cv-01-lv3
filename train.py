@@ -31,15 +31,15 @@ def parse_args():
                         help='학습률')
     parser.add_argument('--num_epochs', type=int, default=200,
                         help='총 에폭 수')
-    parser.add_argument('--val_every', type=int, default=5,
+    parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='Unetpp loss',
+    parser.add_argument('--wandb_project', type=str, default='Unetpp Aug',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='dice_loss', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
     
     # Early stopping 관련 인자 수정
     parser.add_argument('--early_stopping', type=bool, default=True,
@@ -72,6 +72,7 @@ def main():
     
     # 데이터셋 및 데이터로더 설정
     train_transform = A.Compose([
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.Resize(512,512)
     ])
 
