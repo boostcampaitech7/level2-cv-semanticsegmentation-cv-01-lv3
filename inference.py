@@ -80,15 +80,15 @@ def parse_args():
     
     parser.add_argument('--image_root', type=str, default='./data/test/DCM',
                         help='테스트 이미지가 있는 디렉토리 경로')
-    parser.add_argument('--model_path', type=str, default='/data/ephemeral/home/kenlee/level2-cv-semanticsegmentation-cv-01-lv3/checkpoints/DELETE_11-19_07-56-38_UPerNet(resnest101e)/UPerNet_Exp_Loss_epoch_196_dice_0.9599.pt',
+    parser.add_argument('--model_path', type=str, default='./checkpoints/11-21_16-53-05_/hrnet_w64_epoch_125_dice_0.9715.pt',
                         help='학습된 모델 파일 경로')
     parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='세그멘테이션 임계값')
-    parser.add_argument('--output_path', type=str, default='DICE_Loss_applied_cca_2000.csv',
+    parser.add_argument('--output_path', type=str, default='Baseline_1024.csv',
                         help='결과 저장할 CSV 파일 경로')
-    parser.add_argument('--img_size', type=int, default=512,
+    parser.add_argument('--img_size', type=int, default=1088,
                         help='입력 이미지 크기')
     parser.add_argument('--min_component_size', type=int, default=2000,
                         help='Minimum size for connected components')
