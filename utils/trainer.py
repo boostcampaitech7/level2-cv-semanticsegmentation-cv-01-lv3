@@ -191,6 +191,67 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 })
             
                         
+def visualize_mismatch(worst_batch_data, epoch, num_visualize, data_loader_length):
+    """Visualize the worst performing images with their predictions and misclassification maps"""
+    if worst_batch_data is None or not wandb:
+        return
+        
+    n_vis = min(worst_batch_data['images'].size(0), num_visualize)
+    dice_scores = worst_batch_data['dice_scores'].mean(dim=1)
+    sorted_indices = torch.argsort(dice_scores)
+    
+    mismatch_images = []  # 이미지들을 리스트로 모음
+    
+    for idx in range(n_vis):
+        img_idx = sorted_indices[idx]
+        sample_image = worst_batch_data['images'][img_idx]
+        sample_mask = worst_batch_data['masks'][img_idx]
+        sample_pred = worst_batch_data['predictions'][img_idx]
+        sample_dice = dice_scores[img_idx].item()
+        
+        # 오분류 맵 생성
+        misclass_map = torch.zeros(3, sample_mask.size(1), sample_mask.size(2))
+        for cls_idx in range(len(CLASSES)):
+            misclass_map[0] += ((sample_pred[cls_idx] == 1) & (sample_mask[cls_idx] == 0)).float()  # FP (Red)
+            misclass_map[2] += ((sample_pred[cls_idx] == 0) & (sample_mask[cls_idx] == 1)).float()  # FN (Blue)
+        
+        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+        
+        # 원본 이미지
+        axes[0].imshow(sample_image.permute(1,2,0))
+        axes[0].set_title('Original Image')
+        axes[0].axis('off')
+        
+        # Ground Truth
+        gt_vis = sample_mask.sum(0)
+        axes[1].imshow(gt_vis, cmap='gray')
+        axes[1].set_title('Ground Truth')
+        axes[1].axis('off')
+
+        # 예측 결과
+        pred_vis = sample_pred.sum(0)
+        axes[2].imshow(pred_vis, cmap='gray')
+        axes[2].set_title('Prediction')
+        axes[2].axis('off')
+        
+        # 오분류 맵
+        axes[3].imshow(misclass_map.permute(1,2,0))
+        axes[3].set_title(f'Misclassification Map\nDice Score: {sample_dice:.4f}')
+        axes[3].axis('off')
+        
+        plt.tight_layout()
+        
+        # 이미지를 리스트에 추가
+        mismatch_images.append(wandb.Image(fig))
+        plt.close()
+    
+    # 한번에 모든 이미지를 Media로 로깅
+    wandb.log({
+        "Media/Mismatch_Visualization": mismatch_images,
+        "epoch": epoch,
+        "step": epoch * data_loader_length
+    })
+
 def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
     print(f'Start validation #{epoch:2d}')
     model.eval()
@@ -198,10 +259,10 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
     dices = []
     total_loss = 0
     cnt = 0
-    
-    # 가장 낮은 dice score를 가진 배치 저장을 위한 변수들
     worst_batch_dice = float('inf')
     worst_batch_data = None
+    n_classes = len(CLASSES)
+    total_conf_matrix = torch.zeros((n_classes, n_classes), device='cuda')
     
     misclassification_info = {cls: {'false_positives': 0, 'false_negatives': 0} for cls in CLASSES}
     total_pixels = 0
@@ -227,17 +288,18 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
                 outputs = F.interpolate(outputs, size=(mask_h, mask_w), mode="bilinear")
     
             loss = criterion(outputs, masks)
-            total_loss += loss
+            total_loss += loss.item() # gradient 계산이 필요 없으므로 item() 사용
             cnt += 1
 
             outputs = torch.sigmoid(outputs)
             predictions = (outputs > thr).float()
             
-            # 현재 배치의 dice score 계산
-            current_dice = dice_coef(predictions.cpu(), masks.cpu())
+            # Dice score 계산
+            current_dice = dice_coef(predictions, masks)
+            dices.append(current_dice)
             batch_avg_dice = torch.mean(current_dice).item()
-            
-            # 현재 배치가 지금까지의 최저 dice score보다 낮으면 저장
+            progress_bar.set_postfix(loss=round(loss.item(), 4), avg_loss=round(total_loss / cnt, 4))
+            # Worst batch 저장
             if batch_avg_dice < worst_batch_dice:
                 worst_batch_dice = batch_avg_dice
                 worst_batch_data = {
@@ -247,7 +309,11 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
                     'dice_scores': current_dice
                 }
             
-            # 각 클래스별 오분류 계산
+            # Confusion matrix 업데이트
+            total_conf_matrix += calculate_confusion_matrix(masks, predictions, n_classes)
+            
+            # 오분류 정보 수집
+            total_pixels += images.size(0) * images.size(2) * images.size(3)
             for cls_idx, cls_name in enumerate(CLASSES):
                 false_positives = ((predictions[:, cls_idx] == 1) & (masks[:, cls_idx] == 0)).sum().item()
                 false_negatives = ((predictions[:, cls_idx] == 0) & (masks[:, cls_idx] == 1)).sum().item()
@@ -255,100 +321,29 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
                 misclassification_info[cls_name]['false_positives'] += false_positives
                 misclassification_info[cls_name]['false_negatives'] += false_negatives
             
-            total_pixels += images.size(0) * images.size(2) * images.size(3)
-            
-            dices.append(current_dice)
-            progress_bar.set_postfix(loss=round(loss.item(), 4), avg_loss=round(total_loss / cnt, 4))
-        
-        # 가장 낮은 dice score를 가진 배치에 대한 시각화
-        if worst_batch_data is not None and wandb:
-            n_vis = min(worst_batch_data['images'].size(0), num_visualize)
-            
-            # dice score 기준으로 이미지 정렬
-            dice_scores = worst_batch_data['dice_scores'].mean(dim=1)  # 각 이미지의 평균 dice score
-            sorted_indices = torch.argsort(dice_scores)  # dice score가 낮은 순서대로 정렬
-            
-            for idx in range(n_vis):
-                img_idx = sorted_indices[idx]
-                sample_image = worst_batch_data['images'][img_idx]
-                sample_mask = worst_batch_data['masks'][img_idx]
-                sample_pred = worst_batch_data['predictions'][img_idx]
-                sample_dice = dice_scores[img_idx].item()
-                
-                # 오분류 맵 생성
-                misclass_map = torch.zeros(3, sample_mask.size(1), sample_mask.size(2))
-                for cls_idx in range(len(CLASSES)):
-                    misclass_map[0] += ((sample_pred[cls_idx] == 1) & (sample_mask[cls_idx] == 0)).float()  # FP (Red)
-                    misclass_map[2] += ((sample_pred[cls_idx] == 0) & (sample_mask[cls_idx] == 1)).float()  # FN (Blue)
-                
-                fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-                
-                # 원본 이미지
-                axes[0].imshow(sample_image.permute(1,2,0))
-                axes[0].set_title('Original Image')
-                axes[0].axis('off')
-                
-                # Ground Truth
-                gt_vis = sample_mask.sum(0)
-                axes[1].imshow(gt_vis, cmap='gray')
-                axes[1].set_title('Ground Truth')
-                axes[1].axis('off')
-
-                # 예측 결과
-                pred_vis = sample_pred.sum(0)
-                axes[2].imshow(pred_vis, cmap='gray')
-                axes[2].set_title('Prediction')
-                axes[2].axis('off')
-                
-                # 오분류 맵
-                axes[3].imshow(misclass_map.permute(1,2,0))
-                axes[3].set_title(f'Misclassification Map\nDice Score: {sample_dice:.4f}')
-                axes[3].axis('off')
-                
-                plt.tight_layout()
-                wandb.log({f"Mismatch Visualization/miprediction graph epoch{epoch}_img{idx}": wandb.Image(fig)})
-                plt.close()
     
-    # 오분류 통계 출력 및 로깅
-    print("\nMisclassification Statistics:")
-    misclass_stats = {}
-    for cls_name in CLASSES:
-        fp = misclassification_info[cls_name]['false_positives']
-        fn = misclassification_info[cls_name]['false_negatives']
-        fp_rate = fp / total_pixels * 100
-        fn_rate = fn / total_pixels * 100
-        
-        
-        if wandb:
+    # Mismatch visualization 호출 시 data_loader 길이도 전달
+    visualize_mismatch(worst_batch_data, epoch, num_visualize, len(data_loader))
+    
+    # 오분류 통계 로깅
+    if total_pixels > 0 and wandb:
+        misclass_stats = {}
+        for cls_name in CLASSES:
+            fp = misclassification_info[cls_name]['false_positives']
+            fn = misclassification_info[cls_name]['false_negatives']
+            fp_rate = fp / total_pixels * 100
+            fn_rate = fn / total_pixels * 100
             misclass_stats.update({
                 f"Mismatch Visualization/{cls_name}_FP_rate": fp_rate,
                 f"Mismatch Visualization/{cls_name}_FN_rate": fn_rate
             })
-    
-    if wandb:
         wandb.log(misclass_stats)
-                
-        outputs = (outputs > thr).float()
-            
-        ##confusion matrix 계산 (2024.11.21)
-        total_conf_matrix += calculate_confusion_matrix(masks, outputs, n_classes)
-            
-        # dice coefficient 계산 (outputs와 masks가 같은 디바이스에 있어야 함)
-        dice = dice_coef(outputs, masks)
-        dices.append(dice)
     
-
-    avg_conf_matrix = total_conf_matrix / cnt # 전체 배치에 대한 평균 confusion matrix 
-    
+    # 최종 메트릭 계산
+    avg_conf_matrix = total_conf_matrix / cnt
     avg_loss = total_loss / cnt
     dices = torch.cat(dices, 0)
     dices_per_class = torch.mean(dices, 0)
-    dice_str = [
-        f"{c:<12}: {d.item():.4f}"
-        for c, d in zip(CLASSES, dices_per_class)
-    ]
-    dice_str = "\n".join(dice_str)
-    print(dice_str)
     avg_dice = torch.mean(dices_per_class).item()
     
     ##(11.21) Confusion Metrix heatmap 추가
