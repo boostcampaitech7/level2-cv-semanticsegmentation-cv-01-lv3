@@ -98,7 +98,7 @@ def main():
     
     # Dataset and DataLoader setup
     train_transform = A.Compose([
-        A.Resize(1024,1024)
+        A.Resize(1088,1088)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
