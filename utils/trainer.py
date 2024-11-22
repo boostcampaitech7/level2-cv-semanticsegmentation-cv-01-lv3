@@ -344,6 +344,12 @@ def validation(epoch, model, data_loader, criterion, thr=0.5, num_visualize=4):
     avg_loss = total_loss / cnt
     dices = torch.cat(dices, 0)
     dices_per_class = torch.mean(dices, 0)
+    dice_str = [
+        f"{c:<12}: {d.item():.4f}"
+        for c, d in zip(CLASSES, dices_per_class)
+    ]
+    dice_str = "\n".join(dice_str)
+    print(dice_str)
     avg_dice = torch.mean(dices_per_class).item()
     
     ##(11.21) Confusion Metrix heatmap 추가
