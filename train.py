@@ -37,14 +37,13 @@ def parse_args():
                         help='검증 주기')
     parser.add_argument('--accumulation_steps', type=int, default=4, help='Gradient Accumulation Steps를 설정')
     # 실험 관리 용도
-    parser.add_argument('--augmentation', type=str, default='', help='Checkpoint를 저장하는 디렉토리 이름 저장 용도')
     # 스케줄러 설정 (OneCycleLR 또는 CosineAnnealingLR 중 하나 사용 가능)
     parser.add_argument('--scheduler', type=str, default='OneCycleLR', help='Scheduler 설정')
     # OneCycleLR에서만 쓰이는 Param 설정
     parser.add_argument('--pct_start', type=int, default=0.1, help='Setting pct_start')
-    parser.add_argument('--max_lr', type=int, default=0.01, help='Setting maximum lr')
-    parser.add_argument('--div_factor', type=int, default=1e3, help='Used for setting initial lr')
-    parser.add_argument('--final_div_factor', type=int, default=25e5, help='Used for setting min lr')
+    parser.add_argument('--max_lr', type=int, default=0.001, help='Setting maximum lr')
+    parser.add_argument('--div_factor', type=int, default=1e2, help='Used for setting initial lr')
+    parser.add_argument('--final_div_factor', type=int, default=25e12, help='Used for setting min lr')
     # CosineAnnealingLR에서만 쓰이는 Param 설정
     parser.add_argument('--min_lr', type=int, default=0)
     parser.add_argument('--T_max', type=int, default=200)
@@ -81,7 +80,7 @@ def main():
     
     current_time = time.strftime("%m-%d_%H-%M-%S")
     # args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.model_name}")
-    args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.augmentation}")
+    args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.wandb_run_name}")
     # Wandb initalize
     wandb.init(
         project=args.wandb_project,
@@ -98,8 +97,9 @@ def main():
     set_seed()
     
     # Dataset and DataLoader setup
+    
     train_transform = A.Compose([
-        A.Resize(1088,1088)
+         A.Resize(1088,1088)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
@@ -109,7 +109,7 @@ def main():
         dataset=train_dataset, 
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=2,
         drop_last=True,
         pin_memory=True
     )
@@ -118,7 +118,7 @@ def main():
         dataset=valid_dataset, 
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=2,
         drop_last=False,
         pin_memory=True
     )
