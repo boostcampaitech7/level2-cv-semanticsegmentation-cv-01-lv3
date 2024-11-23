@@ -10,7 +10,6 @@ from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
 import time
-import cv2
 
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
@@ -24,7 +23,7 @@ def parse_args():
                         help='라벨 json 파일이 있는 디렉토리 경로')
     parser.add_argument('--model_name', type=str, default='efficientnet-b7',
                         help='모델 이름')
-    parser.add_argument('--saved_dir', type=str, default='./checkpoints/augmentation',
+    parser.add_argument('--saved_dir', type=str, default='./checkpoints/loss',
                         help='모델 저장 경로')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='배치 크기')
@@ -36,11 +35,12 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='Unetpp Aug',
+    parser.add_argument('--wandb_project', type=str, default='Unetpp Loss',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='t1', help='WandB Run 이름')
+
 
     # Early stopping 관련 인자 수정
     parser.add_argument('--early_stopping', type=bool, default=True,
@@ -71,17 +71,19 @@ def main():
     # 시드 고정
     set_seed()
     
-    # 데이터셋 및 데이터로더 설정
+    # 데이터셋 및 데이터로더 설정(11.24 - aug결정)
     train_transform = A.Compose([
-        # Augmentation 추가
+        A.ShiftScaleRotate(shift_limit=0.1,p=0.5),
+        A.CLAHE(clip_limit=4.0, tile_grid_size=(3,3), p=1.0),
         A.Resize(512,512)
     ])
     test_transform = A.Compose([
+        A.CLAHE(clip_limit=4.0, tile_grid_size=(3,3), p=1.0),
         A.Resize(512,512)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
-    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=test_transform)
+    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms= test_transform )
 
     train_loader = DataLoader(
         dataset=train_dataset, 
