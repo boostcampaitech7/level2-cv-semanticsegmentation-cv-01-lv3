@@ -10,6 +10,7 @@ from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
 import time
+import cv2
 
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
@@ -23,7 +24,7 @@ def parse_args():
                         help='라벨 json 파일이 있는 디렉토리 경로')
     parser.add_argument('--model_name', type=str, default='efficientnet-b7',
                         help='모델 이름')
-    parser.add_argument('--saved_dir', type=str, default='./checkpoints/loss',
+    parser.add_argument('--saved_dir', type=str, default='./checkpoints/augmentation',
                         help='모델 저장 경로')
     parser.add_argument('--batch_size', type=int, default=8,
                         help='배치 크기')
@@ -40,7 +41,6 @@ def parse_args():
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
     parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
-
 
     # Early stopping 관련 인자 수정
     parser.add_argument('--early_stopping', type=bool, default=True,
@@ -73,12 +73,15 @@ def main():
     
     # 데이터셋 및 데이터로더 설정
     train_transform = A.Compose([
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        # Augmentation 추가
+        A.Resize(512,512)
+    ])
+    test_transform = A.Compose([
         A.Resize(512,512)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
-    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=train_transform)
+    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=test_transform)
 
     train_loader = DataLoader(
         dataset=train_dataset, 
