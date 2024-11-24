@@ -10,7 +10,7 @@ from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
 import time
-
+from utils.loss import CombinedBCEDiceLoss
 # Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
 import wandb
 
@@ -23,9 +23,9 @@ def parse_args():
                         help='라벨 json 파일이 있는 디렉토리 경로')
     parser.add_argument('--model_name', type=str, default='efficientnet-b7',
                         help='모델 이름')
-    parser.add_argument('--saved_dir', type=str, default='./checkpoints/loss',
+    parser.add_argument('--saved_dir', type=str, default='./checkpoints/imgsize',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=3e-4,
                         help='학습률')
@@ -35,11 +35,11 @@ def parse_args():
                         help='검증 주기')
     
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='Unetpp Loss',
+    parser.add_argument('--wandb_project', type=str, default='Unetpp imgsize',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='t1', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
 
 
     # Early stopping 관련 인자 수정
@@ -47,6 +47,8 @@ def parse_args():
                       help='Enable early stopping (default: True)')
     parser.add_argument('--patience', type=int, default=5,
                       help='Early stopping patience (default: 5)')
+    parser.add_argument('--img_size', type=int, default=1024,
+                        help='이미지 크기')
 
     args = parser.parse_args()
     return args
@@ -70,20 +72,21 @@ def main():
     
     # 시드 고정
     set_seed()
-    
+    img_size = args.img_size
+
     # 데이터셋 및 데이터로더 설정(11.24 - aug결정)
     train_transform = A.Compose([
         A.ShiftScaleRotate(shift_limit=0.1,p=0.5),
         A.CLAHE(clip_limit=4.0, tile_grid_size=(3,3), p=1.0),
-        A.Resize(512,512)
+        A.Resize(img_size,img_size)
     ])
     test_transform = A.Compose([
         A.CLAHE(clip_limit=4.0, tile_grid_size=(3,3), p=1.0),
-        A.Resize(512,512)
+        A.Resize(img_size,img_size)
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
-    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms= test_transform )
+    valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms= test_transform)
 
     train_loader = DataLoader(
         dataset=train_dataset, 
@@ -116,7 +119,7 @@ def main():
         )
     
     # Loss function과 optimizer 설정
-    criterion = smp.losses.DiceLoss('multilabel')
+    criterion = CombinedBCEDiceLoss(bce_weight=0.5)
     optimizer = optim.Adam(params=model.parameters(), lr=args.lr,weight_decay=1e-6)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs, eta_min=0)
     
