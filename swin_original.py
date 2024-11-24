@@ -15,6 +15,7 @@ import torch
 from utils.augmentations import UnsharpMask
 # Wandb import
 import wandb
+from utils.model import UperNet_swin
 
 def parse_args():
     parser = argparse.ArgumentParser(description='X-Ray 이미지 세그멘테이션 학습')
@@ -23,7 +24,7 @@ def parse_args():
                         help='학습 이미지가 있는 디렉토리 경로')
     parser.add_argument('--label_root', type=str, default='./data/train/outputs_json',
                         help='라벨 json 파일이 있는 디렉토리 경로')
-    parser.add_argument('--model_name', type=str, default='hrnet_w64',
+    parser.add_argument('--model_name', type=str, default='swin',
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
@@ -48,11 +49,11 @@ def parse_args():
     parser.add_argument('--min_lr', type=int, default=0)
     parser.add_argument('--T_max', type=int, default=200)
     # Wandb logging
-    parser.add_argument('--wandb_project', type=str, default='This will be Deleted',
+    parser.add_argument('--wandb_project', type=str, default='This will be Deleted',#'UPerNet_Exp_Augmentation',
                         help='Wandb 프로젝트 이름')
     parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
                         help='Wandb 팀/조직 이름')
-    parser.add_argument('--wandb_run_name', type=str, default='Original', help='WandB Run 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='Baseline_Swin', help='WandB Run 이름')
 
 
     # Early stopping 관련 인자 수정
@@ -99,7 +100,7 @@ def main():
     # Dataset and DataLoader setup
     
     train_transform = A.Compose([
-         A.Resize(512,512),
+         A.Resize(992,992),
     ])
 
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
@@ -124,12 +125,13 @@ def main():
     )
     
     # Model setup
-    model = smp.UPerNet(
-        encoder_name='tu-hrnet_w64', 
-        encoder_weights='imagenet', 
-        in_channels=3, 
-        classes=len(CLASSES)
-    ).cuda()
+    # model = smp.UPerNet(
+    #     encoder_name='mit_b5', 
+    #     encoder_weights='imagenet', 
+    #     in_channels=3, 
+    #     classes=len(CLASSES)
+    # ).cuda()
+    model = UperNet_swin(img_size=992,size="swinv2_large_window16_384", num_classes=29).cuda()
 
     # Loss function and optimizer setup
     criterion = CombinedBCEDiceLossPosweight(bce_weight=0.5)

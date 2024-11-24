@@ -41,7 +41,6 @@ class SwinEncoder(torch.nn.Module, EncoderMixin):
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
         print(f"before: {x.shape}")
         outs = self.model(x)
-        print(f"after: {outs.shape}") #여기까진 잘 나옴
         print(f"length of outs: {len(outs)}")
         return outs
 
@@ -82,7 +81,7 @@ def parse_args():
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=4,
+    parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
