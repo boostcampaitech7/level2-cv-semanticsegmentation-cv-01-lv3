@@ -262,7 +262,7 @@ def main():
             "dropout": 0.5
         },
         decoder_channels=256,
-        encoder_output_stride=8,
+        encoder_output_stride=16,
         decoder_atrous_rates=(4, 8, 12)
     )
     
@@ -277,7 +277,7 @@ def main():
     # AdamW optimizer 설정
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=2e-4,
+        lr=1e-3,
         weight_decay=0.05,
         betas=(0.9, 0.999)
     )

@@ -72,8 +72,6 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 wandb.log({"learning_rate": current_lr})  # global_step 사용
                 scheduler.step()
             progress_bar.set_postfix(loss=round(loss.item(), 4), time=datetime.datetime.now().strftime("%H:%M:%S"))
-                
-            
             
             # Wandb에 학습 지표 기록
             if wandb is not None:
@@ -85,9 +83,11 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             
         # 검증 주기마다 검증 수행
         if (epoch + 1) % val_every == 0:
-            val_loss, dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
+            torch.cuda.empty_cache()
             # validation 시작 전에 feature extractor 초기화
             feature_extractor = FeatureExtractor(model)
+
+            val_loss, dice, dices_per_class = validation(epoch + 1, model, val_loader, criterion)
             # feature map 시각화 (validation 직후)
             if feature_extractor is not None:
                 feature_extractor.visualize_features(
@@ -122,6 +122,8 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                     del_model(f"{model_name}_epoch_{best_epoch}_dice_{best_dice:.4f}", saved_dir)
                 best_dice = dice
                 best_epoch = epoch + 1
+                if feature_extractor is not None:
+                    feature_extractor.remove_hooks()
                 model_path = save_model(model, f"{model_name}_epoch_{epoch + 1}_dice_{dice:.4f}", saved_dir)
                 wandb.save(model_path)
             
@@ -135,13 +137,17 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
             
             # 히스토리 업데이트
             epoch_history.append(epoch)
-            for class_name, class_dice in zip(CLASSES, dices_per_class):
-                    dice_history[class_name].append(class_dice.item())
-                
-            # 클래스별 Dice score 기록
             class_dice_dict = {}
             for class_name, class_dice in zip(CLASSES, dices_per_class):
-                class_dice_dict[f"valid/dice_{class_name}"] = class_dice.item()
+                    dice_history[class_name].append(class_dice.item())
+                    class_dice_dict[f"valid/dice_{class_name}"] = class_dice.item()
+            
+            # feature_extractor 정리
+            if feature_extractor is not None:
+                feature_extractor.remove_hooks()
+                del feature_extractor
+                feature_extractor = None
+
             wandb.log(class_dice_dict)
 
             # 데이터가 충분히 쌓였을 때만 그래프 그리기
@@ -197,11 +203,10 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 
                 # wandb에 로깅
                 wandb.log({"valid/class_wise_dice_scores": fig})
+            torch.cuda.empty_cache()
     # 학습 종료 시 hook 제거
     if feature_extractor is not None:
         feature_extractor.remove_hooks()
-                        
-            
                         
 def validation(epoch, model, data_loader, criterion, thr=0.5):
     print(f'Start validation #{epoch:2d}')
@@ -218,10 +223,10 @@ def validation(epoch, model, data_loader, criterion, thr=0.5):
         for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()         
             model = model.cuda()
-            try:
-                outputs = model(images)['out']
-            except:
-                outputs = model(images)
+            outputs = model(images)
+            # 튜플인 경우 주 출력 선택
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
             
             output_h, output_w = outputs.size(-2), outputs.size(-1)
             mask_h, mask_w = masks.size(-2), masks.size(-1)
