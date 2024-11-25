@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+issue_template_chooser:
+  custom_templates:
+    - name: Tracking issue (Experiment)
+      about: Use this template for tracking new experiments.
+      template: experiment_issue_template.md
+      title: "[Experiment]: "
+    - name: feature issue
+      about: Use this template for tracking new feature.
+      template: feature_issue_template.md
+      title: "[Feat]: "
