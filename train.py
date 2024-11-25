@@ -25,7 +25,7 @@ def parse_args():
                         help='모델 이름')
     parser.add_argument('--saved_dir', type=str, default='./checkpoints',
                         help='모델 저장 경로')
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=2,
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
@@ -300,8 +300,7 @@ def main():
     # 학습 수행
     train(model, train_loader, valid_loader, criterion, optimizer, 
             args.num_epochs, args.val_every, args.saved_dir, args.model_name, 
-            wandb=wandb, accumulation_steps=args.accumulation_steps,
-            scheduler=scheduler)
+            wandb=wandb, scheduler=scheduler)
     
 if __name__ == '__main__':
     main()

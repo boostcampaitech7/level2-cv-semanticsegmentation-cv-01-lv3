@@ -21,7 +21,10 @@ from colorspacious import cspace_converter
 # Hook import(Feature:#7 Hook 적용, deamin, 2024.11.14)
 from utils.hook import FeatureExtractor
 
-def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, model_name, early_stopping=True, patience=5, wandb=None, scheduler=None):
+from torch.cuda.amp import autocast, GradScaler
+
+def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_every, saved_dir, 
+            model_name, early_stopping=True, patience=5, wandb=None, scheduler=None):
     print('Start training..')
     if early_stopping:
         print(f'Early stopping enabled with patience {patience}')
@@ -32,26 +35,38 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
     # Early stopping 관련 변수
     early_stopping_counter = 0
     best_model_state = None
-    
+    feature_extractor = None
+
+    # GradScaler 초기화
+    scaler = GradScaler()
+
     # 클래스별 다이스 스코어 히스토리 저장을 위한 리스트
     dice_history = {class_name: [] for class_name in CLASSES}
     epoch_history = []
     
+    model.cuda()
+    criterion.cuda()
+
     for epoch in range(num_epochs):
         model.train()
+        optimizer.zero_grad()  # epoch 시작시 gradient 초기화
+
         progress_bar = tqdm(enumerate(data_loader), total=len(data_loader), desc=f"Training: Epoch [{epoch+1}/{num_epochs}]")
         for step, (images, masks) in progress_bar:
             images, masks = images.cuda(), masks.cuda()
-            model = model.cuda()
-            try:
-                outputs = model(images)['out']
-            except:
+            # Mixed Precision Training 적용
+            with autocast():
                 outputs = model(images)
-            loss = criterion(outputs, masks)
-            loss.backward()
+                loss = criterion(outputs, masks)
+
+            # Gradient 계산
+            scaler.scale(loss).backward()
+
+            # optimizer step
+            scaler.step(optimizer)
+            scaler.update()
             optimizer.zero_grad()
-            
-            optimizer.step()
+
             if scheduler is not None:
                 current_lr = scheduler.get_last_lr()[0]
                 wandb.log({"learning_rate": current_lr})  # global_step 사용
@@ -182,7 +197,10 @@ def train(model, data_loader, val_loader, criterion, optimizer, num_epochs, val_
                 
                 # wandb에 로깅
                 wandb.log({"valid/class_wise_dice_scores": fig})
-
+    # 학습 종료 시 hook 제거
+    if feature_extractor is not None:
+        feature_extractor.remove_hooks()
+                        
             
                         
 def validation(epoch, model, data_loader, criterion, thr=0.5):
