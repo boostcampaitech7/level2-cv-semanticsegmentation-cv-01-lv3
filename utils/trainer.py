@@ -87,7 +87,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, scheduler, num_e
                         model.load_state_dict(best_model_state)
                         if wandb:
                             wandb.finish()
-                        return
+                        return val_loss, dice
             
             # Best dice 모델 저장 
             if dice > best_dice:
@@ -197,6 +197,7 @@ def train(model, data_loader, val_loader, criterion, optimizer, scheduler, num_e
                 wandb.log({
                     "valid/confusion_matrix": conf_fig
                 })
+    return val_loss, dice
             
                         
 def visualize_mismatch(worst_batch_data, epoch, num_visualize, data_loader_length):
