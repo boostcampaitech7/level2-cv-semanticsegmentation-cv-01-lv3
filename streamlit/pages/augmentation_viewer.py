@@ -59,12 +59,12 @@ def main():
                 
                 # 증강된 이미지와 마스크 표시
                 st.subheader("증강된 이미지와 마스크")
-                Visualizer.display_image_and_mask(augmented_image, rgb_augmented_mask)
+                Visualizer.display_image_and_mask(augmented_image, rgb_mask)
                 
                 # 증강된 이미지 다운로드 버튼
                 if st.button("증강된 결과 다운로드"):
                     # 이미지와 마스크를 나란히 저장
-                    combined_image = np.hstack((augmented_image, rgb_augmented_mask))
+                    combined_image = np.hstack((augmented_image, rgb_mask))
                     st.download_button(
                         label="결과 저장",
                         data=combined_image.tobytes(),
