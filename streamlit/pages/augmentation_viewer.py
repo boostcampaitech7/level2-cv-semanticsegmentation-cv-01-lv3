@@ -50,11 +50,13 @@ def main():
             # 원본 이미지와 마스크 표시
             st.subheader("원본 이미지와 마스크")
             Visualizer.display_image_and_mask(image, rgb_mask)
+            unique_values = np.unique(mask)
+            print("마스크에 있는 고유값:", unique_values)
             
             if st.button("증강 적용"):
-                # 이미지와 마스크에 동일한 증강 적용
-                augmented_image = aug.apply_transform(np.array(image), transform_type)
-                augmented_mask = aug.apply_transform(mask, transform_type)
+                # 이미지와 마스크에 동일한 증강 적용 (11.23 cropemptyesit는 transform 의 input 사용)
+                augmented_image , augmented_mask = aug.apply_transform(np.array(image), mask, transform_type)
+                # augmented_mask = aug.apply_transform(mask, transform_type)
                 rgb_augmented_mask = MaskGenerator.mask_to_rgb(augmented_mask)
                 
                 # 증강된 이미지와 마스크 표시

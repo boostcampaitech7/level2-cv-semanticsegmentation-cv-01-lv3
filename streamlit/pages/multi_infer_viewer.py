@@ -100,116 +100,79 @@ def main():
     # 데이터 로더 초기화
     data_loader = DataLoader("../data/", mode='test')
     
-    # prediction 폴더 내의 여러 CSV 파일 선택
-    prediction_dir = os.path.join("../", "prediction")
-    csv_files = [f for f in os.listdir(prediction_dir) if f.endswith('.csv')]
-    selected_csvs = st.multiselect("비교할 CSV 파일들 선택", csv_files)
+    # 사이드바에 설정 요소들 배치
+    with st.sidebar:
+        st.header("설정")
+        
+        # prediction 폴더 내의 여러 CSV 파일 선택
+        prediction_dir = os.path.join("../", "prediction")
+        csv_files = [f for f in os.listdir(prediction_dir) if f.endswith('.csv')]
+        selected_csvs = st.multiselect("비교할 CSV 파일들 선택", csv_files)
+        
+        # 이미지 쌍 선택
+        image_files = data_loader.get_image_list()
+        image_pairs = data_loader.get_image_pairs(image_files)
+        selected_pair = st.selectbox("이미지 쌍 선택", list(image_pairs.keys()))
+        
+        # 시각화 모드 선택
+        view_mode = st.radio("시각화 모드 선택", 
+                            ["마스크 중첩 모드", "나란히 비교 모드", "클래스별 비교 모드"])
     
-    # 이미지 쌍 선택
-    image_files = data_loader.get_image_list()
-    image_pairs = data_loader.get_image_pairs(image_files)
-    selected_pair = st.selectbox("이미지 쌍 선택", list(image_pairs.keys()))
-    
-    # 시각화 모드 선택 부분 수정
-    view_mode = st.radio("시각화 모드 선택", 
-                        ["마스크 중첩 모드", "나란히 비교 모드", "클래스별 비교 모드"])
-    
+    # 메인 영역에 결과 표시
     if selected_pair and selected_csvs:
         mask_generator = MaskGenerator()
         # CSV 파일별 고유 색상 생성
         csv_colors = {csv: get_distinct_colors(len(selected_csvs))[idx] 
                      for idx, csv in enumerate(selected_csvs)}
-    
-    if view_mode == "클래스별 비교 모드":
-        st.subheader("클래스별 마스크 비교")
         
-        # 클래스 선택
-        selected_class = st.selectbox("클래스 선택", CLASSES)
-    
-        # Left 이미지
-        image_l = cv2.imread(os.path.join(data_loader.images_dir, 
-                                        image_pairs[selected_pair]['L']))
-        image_l = cv2.cvtColor(image_l, cv2.COLOR_BGR2RGB)
-        
-        # Right 이미지
-        image_r = cv2.imread(os.path.join(data_loader.images_dir, 
-                                        image_pairs[selected_pair]['R']))
-        image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
-        
-        col1, col2 = st.columns(2)
-        
-        # 클래스별 비교 모드 부분 수정
-        with col1:
-            st.write(f"Left Image - {selected_class}")
-            masks_l = []
-            for csv_file in selected_csvs:
-                try:
-                    mask = mask_generator.load_and_process_masks_by_class(
-                        data_loader,
-                        os.path.join(prediction_dir, csv_file),
-                        image_pairs[selected_pair]['L'].split('/')[-1],
-                        image_l.shape,
-                        selected_class  # 클래스 이름 직접 전달,
-                    )
-                    masks_l.append(mask)
-                except Exception as e:
-                    st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+        if view_mode == "클래스별 비교 모드":
+            st.subheader("클래스별 마스크 비교")
+            # 클래스 선택도 사이드바로 이동
+            with st.sidebar:
+                selected_class = st.selectbox("클래스 선택", CLASSES)
             
-            if masks_l:
-                result_l = overlay_multiple_masks_from_rle(
-                    image=image_l,
-                    data_loaders=data_loader,
-                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
-                    image_name=image_pairs[selected_pair]['L'].split('/')[-1],
-                    image_shape=image_l.shape,
-                    alpha=0.7,
-                    beta=0.3,
-                    csv_colors=[csv_colors[csv] for csv in selected_csvs],
-                    selected_class=selected_class  # 선택된 클래스 전달
-                )
-                st.image(result_l, use_container_width=True)
+            # Left 이미지
+            image_l = cv2.imread(os.path.join(data_loader.images_dir, 
+                                            image_pairs[selected_pair]['L']))
+            image_l = cv2.cvtColor(image_l, cv2.COLOR_BGR2RGB)
             
-                # 범례 표시
-                st.write("📋 범례")
-                for csv, color in csv_colors.items():
-                    st.markdown(
-                        f'<div style="display: flex; align-items: center; margin: 5px 0;">'
-                        f'<div style="width: 25px; height: 25px; background-color: rgb{color}; '
-                        f'margin-right: 10px; border: 1px solid black;"></div>'
-                        f'<span style="font-size: 16px;">{csv}</span></div>',
-                        unsafe_allow_html=True
-                    )
-        
-        # 클래스별 비교 모드 부분 수정
-        with col2:
-            st.write(f"Right Image - {selected_class}")
-            masks_r = []
-            for csv_file in selected_csvs:
-                try:
-                    mask = mask_generator.load_and_process_masks_by_class(
-                        data_loader,
-                        os.path.join(prediction_dir, csv_file),
-                        image_pairs[selected_pair]['R'].split('/')[-1],
-                        image_r.shape,
-                        selected_class  # 클래스 이름 직접 전달
-                    )
-                    masks_r.append(mask)
-                except Exception as e:
-                    st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+            # Right 이미지
+            image_r = cv2.imread(os.path.join(data_loader.images_dir, 
+                                            image_pairs[selected_pair]['R']))
+            image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
             
-            if masks_r:
-                result_r = overlay_multiple_masks_from_rle(
-                    image=image_r,
-                    data_loaders=data_loader,
-                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
-                    image_name=image_pairs[selected_pair]['R'].split('/')[-1],
-                    image_shape=image_r.shape,
-                    alpha=0.7,
-                    beta=0.3,
-                    csv_colors=[csv_colors[csv] for csv in selected_csvs],
-                    selected_class=selected_class  # 선택된 클래스 전달
-                )
-                st.image(result_r, use_container_width=True)
+            col1, col2 = st.columns(2)
+            
+            # 클래스별 비교 모드 부분 수정
+            with col1:
+                st.write(f"Left Image - {selected_class}")
+                masks_l = []
+                for csv_file in selected_csvs:
+                    try:
+                        mask = mask_generator.load_and_process_masks_by_class(
+                            data_loader,
+                            os.path.join(prediction_dir, csv_file),
+                            image_pairs[selected_pair]['L'].split('/')[-1],
+                            image_l.shape,
+                            selected_class  # 클래스 이름 직접 전달,
+                        )
+                        masks_l.append(mask)
+                    except Exception as e:
+                        st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+                
+                if masks_l:
+                    result_l = overlay_multiple_masks_from_rle(
+                        image=image_l,
+                        data_loaders=data_loader,
+                        csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
+                        image_name=image_pairs[selected_pair]['L'].split('/')[-1],
+                        image_shape=image_l.shape,
+                        alpha=0.7,
+                        beta=0.3,
+                        csv_colors=[csv_colors[csv] for csv in selected_csvs],
+                        selected_class=selected_class  # 선택된 클래스 전달
+                    )
+                    st.image(result_l, use_container_width=True)
                 
                 # 범례 표시
                 st.write("📋 범례")
@@ -221,144 +184,185 @@ def main():
                         f'<span style="font-size: 16px;">{csv}</span></div>',
                         unsafe_allow_html=True
                     )
-        
-       
-    # 마스크 중첩 모드 부분
-    elif view_mode == "마스크 중첩 모드":
-        st.subheader("마스크 중첩 비교")
-        
-        # Left 이미지
-        image_l = cv2.imread(os.path.join(data_loader.images_dir, 
-                                        image_pairs[selected_pair]['L']))
-        image_l = cv2.cvtColor(image_l, cv2.COLOR_BGR2RGB)
-        
-        # Right 이미지
-        image_r = cv2.imread(os.path.join(data_loader.images_dir, 
-                                        image_pairs[selected_pair]['R']))
-        image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
-
-        # 뚜렷한 색상 생성
-        distinct_colors = get_distinct_colors(len(selected_csvs))
-        csv_colors = {csv: color for csv, color in zip(selected_csvs, distinct_colors)}
-        
-        # Left 이미지 처리
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            st.write("Left Image")
-            try:
-                result_l = overlay_multiple_masks_from_rle(
-                    image=image_l,
-                    data_loaders=data_loader,
-                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
-                    image_name=image_pairs[selected_pair]['L'].split('/')[-1],
-                    image_shape=image_l.shape,
-                    alpha=0.7,
-                    beta=0.3,
-                    csv_colors=[csv_colors[csv] for csv in selected_csvs]
-                )
-                st.image(result_l, use_container_width=True)
-            except Exception as e:
-                st.error(f"마스크 처리 중 오류 발생: {str(e)}")
-
-        with col2:
-            st.write("📋 범례")
-            for csv, color in csv_colors.items():
-                st.markdown(
-                    f'<div style="display: flex; align-items: center; margin: 5px 0;">'
-                    f'<div style="width: 25px; height: 25px; background-color: rgb{color}; '
-                    f'margin-right: 10px; border: 1px solid black;"></div>'
-                    f'<span style="font-size: 16px;">{csv}</span></div>',
-                    unsafe_allow_html=True
-                )
-
-        # Right 이미지 처리
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            st.write("Right Image")
-            try:
-                result_r = overlay_multiple_masks_from_rle(
-                    image=image_r,
-                    data_loaders=data_loader,
-                    csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
-                    image_name=image_pairs[selected_pair]['R'].split('/')[-1],
-                    image_shape=image_r.shape,
-                    alpha=0.7,
-                    beta=0.3,
-                    csv_colors=[csv_colors[csv] for csv in selected_csvs]
-                )
-                st.image(result_r, use_container_width=True)
-            except Exception as e:
-                st.error(f"마스크 처리 중 오류 발생: {str(e)}")
-        with col2:
-            st.write("📋 범례")
-            for csv, color in csv_colors.items():
-                st.markdown(
-                    f'<div style="display: flex; align-items: center; margin: 5px 0;">'
-                    f'<div style="width: 25px; height: 25px; background-color: rgb{color}; '
-                    f'margin-right: 10px; border: 1px solid black;"></div>'
-                    f'<span style="font-size: 16px;">{csv}</span></div>',
-                    unsafe_allow_html=True
-                )
-        
-    else:  # 나란히 비교 모드
-        num_cols = len(selected_csvs) + 1
-        cols = st.columns(num_cols)
             
-        # Left 이미지 세트
-        with cols[0]:
-            st.write("Original")
-            image_l = cv2.imread(os.path.join(data_loader.images_dir, 
-                                            image_pairs[selected_pair]['L']))
-            image_l = cv2.cvtColor(image_l, cv2.COLOR_BGR2RGB)
-            st.image(image_l, use_container_width=True)
-        
-        # 각 CSV 파일별 마스크 (Left)
-        for idx, csv_file in enumerate(selected_csvs, 1):
-            with cols[idx]:
-                st.write(f"Mask: {csv_file}")
-                try:
-                    result = overlay_multiple_masks_from_rle(
-                        image=image_l,
-                        data_loaders=data_loader,
-                        csv_paths=[os.path.join(prediction_dir, csv_file)],
-                        image_name=image_pairs[selected_pair]['L'].split('/')[-1],
-                        image_shape=image_l.shape,
-                        alpha=0.7,
-                        beta=0.3,
-                        csv_colors=[csv_colors[csv_file]]
-                    )
-                    st.image(result, use_container_width=True)
-                except Exception as e:
-                    st.error(f"마스크 처리 중 오류 발생: {str(e)}")
-        
-        # Right 이미지 세트 (Left와 동일한 로직)
-        with cols[0]:
-            st.write("Original")
-            image_r = cv2.imread(os.path.join(data_loader.images_dir, 
-                                            image_pairs[selected_pair]['R']))
-            image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
-            st.image(image_r, use_container_width=True)
-        
-        # 각 CSV 파일별 마스크 (Right)
-        for idx, csv_file in enumerate(selected_csvs, 1):
-            with cols[idx]:
-                st.write(f"Mask: {csv_file}")
-                try:
-                    result = overlay_multiple_masks_from_rle(
+            # 클래스별 비교 모드 부분 수정
+            with col2:
+                st.write(f"Right Image - {selected_class}")
+                masks_r = []
+                for csv_file in selected_csvs:
+                    try:
+                        mask = mask_generator.load_and_process_masks_by_class(
+                            data_loader,
+                            os.path.join(prediction_dir, csv_file),
+                            image_pairs[selected_pair]['R'].split('/')[-1],
+                            image_r.shape,
+                            selected_class  # 클래스 이름 직접 전달
+                        )
+                        masks_r.append(mask)
+                    except Exception as e:
+                        st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+                
+                if masks_r:
+                    result_r = overlay_multiple_masks_from_rle(
                         image=image_r,
                         data_loaders=data_loader,
-                        csv_paths=[os.path.join(prediction_dir, csv_file)],
+                        csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
                         image_name=image_pairs[selected_pair]['R'].split('/')[-1],
                         image_shape=image_r.shape,
                         alpha=0.7,
                         beta=0.3,
-                        csv_colors=[csv_colors[csv_file]]
+                        csv_colors=[csv_colors[csv] for csv in selected_csvs],
+                        selected_class=selected_class  # 선택된 클래스 전달
                     )
-                    st.image(result, use_container_width=True)
+                    st.image(result_r, use_container_width=True)
+                    
+                    # 범례 표시
+                    st.write("📋 범례")
+                    for csv, color in csv_colors.items():
+                        st.markdown(
+                            f'<div style="display: flex; align-items: center; margin: 5px 0;">'
+                            f'<div style="width: 25px; height: 25px; background-color: rgb{color}; '
+                            f'margin-right: 10px; border: 1px solid black;"></div>'
+                            f'<span style="font-size: 16px;">{csv}</span></div>',
+                            unsafe_allow_html=True
+                        )
+            
+        # 마스크 중첩 모드 부분
+        elif view_mode == "마스크 중첩 모드":
+            st.subheader("마스크 중첩 비교")
+            
+            # Left 이미지
+            image_l = cv2.imread(os.path.join(data_loader.images_dir, 
+                                            image_pairs[selected_pair]['L']))
+            image_l = cv2.cvtColor(image_l, cv2.COLOR_BGR2RGB)
+            
+            # Right 이미지
+            image_r = cv2.imread(os.path.join(data_loader.images_dir, 
+                                            image_pairs[selected_pair]['R']))
+            image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
+
+            # 뚜렷한 색상 생성
+            distinct_colors = get_distinct_colors(len(selected_csvs))
+            csv_colors = {csv: color for csv, color in zip(selected_csvs, distinct_colors)}
+            
+            # Left 이미지 처리
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.write("Left Image")
+                try:
+                    result_l = overlay_multiple_masks_from_rle(
+                        image=image_l,
+                        data_loaders=data_loader,
+                        csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
+                        image_name=image_pairs[selected_pair]['L'].split('/')[-1],
+                        image_shape=image_l.shape,
+                        alpha=0.7,
+                        beta=0.3,
+                        csv_colors=[csv_colors[csv] for csv in selected_csvs]
+                    )
+                    st.image(result_l, use_container_width=True)
                 except Exception as e:
                     st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+
+            with col2:
+                st.write("📋 범례")
+                for csv, color in csv_colors.items():
+                    st.markdown(
+                        f'<div style="display: flex; align-items: center; margin: 5px 0;">'
+                        f'<div style="width: 25px; height: 25px; background-color: rgb{color}; '
+                        f'margin-right: 10px; border: 1px solid black;"></div>'
+                        f'<span style="font-size: 16px;">{csv}</span></div>',
+                        unsafe_allow_html=True
+                    )
+
+            # Right 이미지 처리
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.write("Right Image")
+                try:
+                    result_r = overlay_multiple_masks_from_rle(
+                        image=image_r,
+                        data_loaders=data_loader,
+                        csv_paths=[os.path.join(prediction_dir, csv) for csv in selected_csvs],
+                        image_name=image_pairs[selected_pair]['R'].split('/')[-1],
+                        image_shape=image_r.shape,
+                        alpha=0.7,
+                        beta=0.3,
+                        csv_colors=[csv_colors[csv] for csv in selected_csvs]
+                    )
+                    st.image(result_r, use_container_width=True)
+                except Exception as e:
+                    st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+            with col2:
+                st.write("📋 범례")
+                for csv, color in csv_colors.items():
+                    st.markdown(
+                        f'<div style="display: flex; align-items: center; margin: 5px 0;">'
+                        f'<div style="width: 25px; height: 25px; background-color: rgb{color}; '
+                        f'margin-right: 10px; border: 1px solid black;"></div>'
+                        f'<span style="font-size: 16px;">{csv}</span></div>',
+                        unsafe_allow_html=True
+                    )
+            
+        else:  # 나란히 비교 모드
+            num_cols = len(selected_csvs) + 1
+            cols = st.columns(num_cols)
+            
+            # Left 이미지 세트
+            with cols[0]:
+                st.write("Original")
+                image_l = cv2.imread(os.path.join(data_loader.images_dir, 
+                                                image_pairs[selected_pair]['L']))
+                image_l = cv2.cvtColor(image_l, cv2.COLOR_BGR2RGB)
+                st.image(image_l, use_container_width=True)
+            
+            # 각 CSV 파일별 마스크 (Left)
+            for idx, csv_file in enumerate(selected_csvs, 1):
+                with cols[idx]:
+                    st.write(f"Mask: {csv_file}")
+                    try:
+                        result = overlay_multiple_masks_from_rle(
+                            image=image_l,
+                            data_loaders=data_loader,
+                            csv_paths=[os.path.join(prediction_dir, csv_file)],
+                            image_name=image_pairs[selected_pair]['L'].split('/')[-1],
+                            image_shape=image_l.shape,
+                            alpha=0.7,
+                            beta=0.3,
+                            csv_colors=[csv_colors[csv_file]]
+                        )
+                        st.image(result, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"마스크 처리 중 오류 발생: {str(e)}")
+            
+            # Right 이미지 세트 (Left와 동일한 로직)
+            with cols[0]:
+                st.write("Original")
+                image_r = cv2.imread(os.path.join(data_loader.images_dir, 
+                                                image_pairs[selected_pair]['R']))
+                image_r = cv2.cvtColor(image_r, cv2.COLOR_BGR2RGB)
+                st.image(image_r, use_container_width=True)
+            
+            # 각 CSV 파일별 마스크 (Right)
+            for idx, csv_file in enumerate(selected_csvs, 1):
+                with cols[idx]:
+                    st.write(f"Mask: {csv_file}")
+                    try:
+                        result = overlay_multiple_masks_from_rle(
+                            image=image_r,
+                            data_loaders=data_loader,
+                            csv_paths=[os.path.join(prediction_dir, csv_file)],
+                            image_name=image_pairs[selected_pair]['R'].split('/')[-1],
+                            image_shape=image_r.shape,
+                            alpha=0.7,
+                            beta=0.3,
+                            csv_colors=[csv_colors[csv_file]]
+                        )
+                        st.image(result, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"마스크 처리 중 오류 발생: {str(e)}")
 
 if __name__ == "__main__":
     main()
