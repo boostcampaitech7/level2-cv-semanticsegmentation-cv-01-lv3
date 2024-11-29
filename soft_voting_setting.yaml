@@ -1,0 +1,54 @@
+image_root: /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/data/test/DCM
+root_path: /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3
+
+CLASSES: [
+    'finger-1', 'finger-2', 'finger-3', 'finger-4', 'finger-5',
+    'finger-6', 'finger-7', 'finger-8', 'finger-9', 'finger-10',
+    'finger-11', 'finger-12', 'finger-13', 'finger-14', 'finger-15',
+    'finger-16', 'finger-17', 'finger-18', 'finger-19', 'Trapezium',
+    'Trapezoid', 'Capitate', 'Hamate', 'Scaphoid', 'Lunate',
+    'Triquetrum', 'Pisiform', 'Radius', 'Ulna',
+]
+
+batch_size: 2
+num_workers: 2
+
+threshold: 0.3
+
+model_paths:
+  model_1: 
+    size : 1024
+    path: /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/ensemble/model_pt/(#65)hrnet_w64_epoch_125_dice_0.9715.pt
+    transforms:
+      - type: CLAHE
+        apply: false
+      - type: Resize
+        height: 1024
+        width: 1024
+  model_2: 
+    size : 1024
+    path: /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/ensemble/model_pt/1024_lr2e4_adamW_78.pt
+    transforms:
+      - type: CLAHE
+        apply: true
+        clip_limit: 3.0
+        tile_grid_size: [3, 3]
+        p: 1.0
+      - type: Resize
+        height: 1024
+        width: 1024
+  model_3: 
+    size : 1536
+    path: /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/ensemble/model_pt/hrnet_w18_epoch_24_dice_0.9730.pt
+    transforms:
+      - type: CLAHE
+        apply: true
+        clip_limit: 4.0
+        tile_grid_size: [3, 3]
+        p: 1.0
+      - type: Resize
+        height: 1536
+        width: 1536
+
+save_dir: ./ensemble
+output_name: soft_test11_2m_CLAHE.csv

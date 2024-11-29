@@ -1,0 +1,29 @@
+image_root: /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/data/test/DCM
+root_path: /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3
+
+CLASSES: [
+    'finger-1', 'finger-2', 'finger-3', 'finger-4', 'finger-5',
+    'finger-6', 'finger-7', 'finger-8', 'finger-9', 'finger-10',
+    'finger-11', 'finger-12', 'finger-13', 'finger-14', 'finger-15',
+    'finger-16', 'finger-17', 'finger-18', 'finger-19', 'Trapezium',
+    'Trapezoid', 'Capitate', 'Hamate', 'Scaphoid', 'Lunate',
+    'Triquetrum', 'Pisiform', 'Radius', 'Ulna',
+]
+
+batch_size: 2
+num_workers: 2
+
+threshold: 0.4
+
+model_paths:
+  512: []
+  1024: 
+    - /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/ensemble/model_pt/hrnet_w64_epoch_15_fold2_real_dice_0.9751.pt
+    - /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/ensemble/model_pt/1024_lr2e4_adamW_78.pt
+  1536: 
+    - /data/ephemeral/home/Hongjoo/level2-cv-semanticsegmentation-cv-01-lv3/ensemble/model_pt/hrnet_w18_epoch_29_dice_0.9747_fold4.pt
+  2048: []
+
+
+save_dir: ./ensemble
+output_name: soft_voting_4_total_top3_CLAHE.csv
