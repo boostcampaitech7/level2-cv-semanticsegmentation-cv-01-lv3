@@ -75,7 +75,6 @@ level2-cv-semanticsegmentation-cv-01-lv3/
 │   ├── augmentation.py
 │   ├── handrotation.py
 │   ├── hard_voting.py
-│   ├── soft_voting.py
 │   ├── trainer.py
 │   └── visualization.py
 │
