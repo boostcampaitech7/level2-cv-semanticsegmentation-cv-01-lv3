@@ -162,3 +162,6 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
+
+# Wandb(Feature:#3 Wandb logging, deamin, 2024.11.12)
+wandb/
