@@ -53,7 +53,7 @@ class MaskGenerator:
             rgb_mask[mask == i] = color
             
         return rgb_mask
-    
+        
     @staticmethod
     def decode_rle_to_mask(rle, height, width):
         """
@@ -63,19 +63,27 @@ class MaskGenerator:
             height: 출력 이미지의 높이
             width: 출력 이미지의 너비
         Returns:
-            디코딩된 마스크 (height x width)
+            디코딩된 마스크 (height x width) 또는 빈 마스크 (오류 발생 시)
         """
-        s = rle.split()
-        # s[0::2], s[1::2]로 수정하여 더 명확하게 표현
-        starts, lengths = [np.asarray(x, dtype=int) for x in (s[0::2], s[1::2])]
-        starts -= 1  # 1-based index를 0-based index로 변환
-        ends = starts + lengths
-        img = np.zeros(height * width, dtype=np.uint8)
-        
-        for lo, hi in zip(starts, ends):
-            img[lo:hi] = 1
-        
-        return img.reshape(height, width)
+        try:
+            if isinstance(rle, float):  # NaN 값 체크
+                print(f"Warning: RLE is float value (possibly NaN)")
+                return np.zeros((height, width), dtype=np.uint8)
+                
+            s = str(rle).strip().split()
+            starts, lengths = [np.asarray(x, dtype=int) for x in (s[0::2], s[1::2])]
+            starts -= 1  # 1-based index를 0-based index로 변환
+            ends = starts + lengths
+            img = np.zeros(height * width, dtype=np.uint8)
+            
+            for lo, hi in zip(starts, ends):
+                img[lo:hi] = 1
+            
+            return img.reshape(height, width)
+            
+        except Exception as e:
+            print(f"Warning: Failed to decode RLE: {str(e)}")
+            return np.zeros((height, width), dtype=np.uint8)
     
     @staticmethod
     def load_and_process_masks(data_loader, csv_path, image_name, image_shape, class_idx=None):  # self 파라미터 제거
