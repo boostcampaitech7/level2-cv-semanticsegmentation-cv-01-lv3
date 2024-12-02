@@ -51,14 +51,11 @@ hyperparameter는 원하는 만큼 수정할 수 있습니다.
 
 
 ```
-python inference.py --data_dir=./data --batch_size=8 learning_rate=1e-6 --max_epoch=50
+python inference.py --data_dir=./data --batch_size=8 
 ```
 
-## Project Structure
 
-프로젝트 폴더 구조를 맞춰야 상대경로로 인식됩니다. 
-
-또한 east_dataset.py, loss.py, model.py, detect.py는 대회 종료에 따라 더이상 제공하지 못할 수 있습니다.
+### Project Structure
 
 ```
 ** project structure **
@@ -75,6 +72,10 @@ level2-cv-semanticsegmentation-cv-01-lv3/
 ├──utils/
 │   ├── dataset.py
 │   ├── method.py
+│   ├── augmentation.py
+│   ├── handrotation.py
+│   ├── hard_voting.py
+│   ├── soft_voting.py
 │   ├── trainer.py
 │   └── visualization.py
 │
