@@ -1,13 +1,18 @@
 import os
 import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import argparse
 import torch.nn as nn
 import torch.optim as optim
+import segmentation_models_pytorch as smp
 from torch.utils.data import DataLoader
 from torchvision import models
 from utils.dataset import XRayDataset, CLASSES
 from utils.trainer import train, set_seed
+import time
 
+# Wandb import(Feature:#3 Wandb logging, deamin, 2024.11.12)
+import wandb
 
 def parse_args():
     parser = argparse.ArgumentParser(description='X-Ray 이미지 세그멘테이션 학습')
@@ -24,49 +29,85 @@ def parse_args():
                         help='배치 크기')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='학습률')
-    parser.add_argument('--num_epochs', type=int, default=5,
+    parser.add_argument('--num_epochs', type=int, default=30,
                         help='총 에폭 수')
-    parser.add_argument('--val_every', type=int, default=5,
+    parser.add_argument('--val_every', type=int, default=1,
                         help='검증 주기')
     
-    return parser.parse_args()
+    # Wandb logging
+    parser.add_argument('--wandb_project', type=str, default='FCN_baseline',
+                        help='Wandb 프로젝트 이름')
+    parser.add_argument('--wandb_entity', type=str, default='cv01-HandBone-seg',
+                        help='Wandb 팀/조직 이름')
+    parser.add_argument('--wandb_run_name', type=str, default='', help='WandB Run 이름')
+
+
+    # Early stopping 관련 인자 수정
+    parser.add_argument('--early_stopping', type=bool, default=True,
+                      help='Enable early stopping (default: True)')
+    parser.add_argument('--patience', type=int, default=5,
+                      help='Early stopping patience (default: 5)')
+
+    args = parser.parse_args()
+    return args
 
 def main():
     args = parse_args()
     
+    current_time = time.strftime("%m-%d_%H-%M-%S")
+    args.saved_dir = os.path.join(args.saved_dir, f"{current_time}_{args.model_name}")
+    # Wandb initalize
+    wandb.init(
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        name=args.wandb_run_name,
+        config=vars(args)
+    )
+
     if not os.path.exists(args.saved_dir):
         os.makedirs(args.saved_dir)
+    print(f"Training Results will be saved in {args.saved_dir}!")
     
     # 시드 고정
     set_seed()
     
     # 데이터셋 및 데이터로더 설정
     train_transform = A.Compose([
-        A.Resize(512, 512),
+        A.Resize(512,512)
     ])
-    
+
     train_dataset = XRayDataset(args.image_root, args.label_root, is_train=True, transforms=train_transform)
     valid_dataset = XRayDataset(args.image_root, args.label_root, is_train=False, transforms=train_transform)
-    
+
     train_loader = DataLoader(
         dataset=train_dataset, 
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=2,
-        drop_last=True
+        num_workers=8,
+        drop_last=True,
+        pin_memory=True
     )
     
     valid_loader = DataLoader(
         dataset=valid_dataset, 
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=2,
-        drop_last=False
+        num_workers=8,
+        drop_last=False,
+        pin_memory=True
     )
     
-    # 모델 설정
-    model = models.segmentation.fcn_resnet50(pretrained=True)
-    model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
+    # Torchvision 사용 시 주석 처리 해제
+    #model = models.segmentation.fcn_resnet50(pretrained=True)
+    #model.classifier[4] = nn.Conv2d(512, len(CLASSES), kernel_size=1)
+
+    # 모델 smp로 설정 (모델 변경 시 수정 필요)
+    model = smp.UPerNet(
+        encoder_name='efficientnet-b0', 
+        encoder_weights='imagenet', 
+        in_channels=3, 
+        classes=len(CLASSES)
+        )
     
     # Loss function과 optimizer 설정
     criterion = nn.BCEWithLogitsLoss()
@@ -74,7 +115,7 @@ def main():
     
     # 학습 수행
     train(model, train_loader, valid_loader, criterion, optimizer, 
-          args.num_epochs, args.val_every, args.saved_dir, args.model_name)
+          args.num_epochs, args.val_every, args.saved_dir, args.model_name, wandb=wandb)
 
 if __name__ == '__main__':
     main()
